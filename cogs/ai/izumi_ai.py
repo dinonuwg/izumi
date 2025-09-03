@@ -439,11 +439,17 @@ class IzumiAI(commands.Cog):
         """Generate response with model fallback and error handling using shared channel context"""
         session_data = self._get_or_create_session(channel_id)
         
-        # Create user-aware prompt for shared conversation
+        # Get personality enhancements
+        mood_data = self.learning_engine.get_daily_mood()
+        time_personality = self.learning_engine.get_time_personality()
+        
+        # Create enhanced user-aware prompt for shared conversation
+        enhanced_prompt = self._enhance_prompt_with_personality(prompt, original_message, username, mood_data, time_personality)
+        
         if username:
-            user_aware_prompt = f"[User: {username}] {prompt}"
+            user_aware_prompt = f"[User: {username}] {enhanced_prompt}"
         else:
-            user_aware_prompt = f"[User ID: {user_id}] {prompt}"
+            user_aware_prompt = f"[User ID: {user_id}] {enhanced_prompt}"
         
         MODEL_HIERARCHY = [
             "gemini-2.5-flash",
@@ -470,7 +476,13 @@ class IzumiAI(commands.Cog):
                 
                 chat = session_data["chat"]
                 response = await chat.send_message_async(user_aware_prompt)
-                return response.text
+                raw_response = response.text
+                
+                # Apply personality quirks and enhancements
+                context_type = self._determine_context_type(original_message, raw_response)
+                enhanced_response = self._apply_personality_quirks(raw_response, mood_data, context_type)
+                
+                return enhanced_response
                 
             except Exception as e:
                 error_str = str(e)
@@ -544,6 +556,106 @@ class IzumiAI(commands.Cog):
         patterns = self.learning_engine.memory_data['users'][user_id_str]['learning_data']['ai_response_patterns']
         if len(patterns) > 50:
             self.learning_engine.memory_data['users'][user_id_str]['learning_data']['ai_response_patterns'] = patterns[-50:]
+    
+    def _enhance_prompt_with_personality(self, prompt: str, original_message: str, username: str, mood_data: dict, time_personality: dict) -> str:
+        """Enhance the prompt with current personality state and behavioral guidance"""
+        enhancement_parts = []
+        
+        # Add mood context
+        mood_desc = mood_data.get('mood_description', 'feeling normal')
+        energy_level = mood_data.get('energy_level', 0.5)
+        enhancement_parts.append(f"You are currently {mood_desc}")
+        
+        # Add time-based personality guidance
+        time_style = time_personality.get('style', 'casual')
+        greeting_options = time_personality.get('greeting_style', ['hey!'])
+        enhancement_parts.append(f"Your current style should be {time_style}")
+        
+        # Add energy-based response guidance
+        if energy_level > 0.8:
+            enhancement_parts.append("Respond with high energy and enthusiasm")
+        elif energy_level > 0.6:
+            enhancement_parts.append("Respond with moderate energy and friendliness")
+        elif energy_level > 0.3:
+            enhancement_parts.append("Respond calmly and thoughtfully")
+        else:
+            enhancement_parts.append("Respond quietly and more subdued")
+        
+        # Add behavioral personality context
+        enhancement_parts.append("Remember to use your natural speech patterns and occasional personality quirks")
+        
+        enhanced_prompt = f"{prompt}\n\nPERSONALITY CONTEXT: {' | '.join(enhancement_parts)}"
+        return enhanced_prompt
+    
+    def _apply_personality_quirks(self, response_text: str, mood_data: dict, context_type: str = "general") -> str:
+        """Apply personality quirks and speech patterns to the response"""
+        if not response_text:
+            return response_text
+        
+        # Get quirk decision
+        quirk_decision = self.learning_engine.should_use_quirk(context_type, mood_data)
+        
+        if quirk_decision.get("use_quirk", False):
+            quirk_content = quirk_decision.get("quirk_content", "")
+            quirk_type = quirk_decision.get("quirk_type", "")
+            
+            if quirk_content and quirk_type:
+                # Apply quirk based on type
+                if quirk_type == "thinking":
+                    response_text = f"{quirk_content} {response_text}"
+                elif quirk_type == "enthusiasm":
+                    response_text = f"{response_text} {quirk_content}"
+                elif quirk_type == "agreement":
+                    response_text = f"{quirk_content} {response_text}"
+                elif quirk_type == "favorite_phrase":
+                    # Sometimes add to end, sometimes replace simple acknowledgments
+                    if len(response_text.split()) <= 3:
+                        response_text = quirk_content
+                    else:
+                        response_text = f"{response_text} {quirk_content}"
+        
+        # Apply occasional typos (very rarely)
+        import random
+        if random.random() < 0.05:  # 5% chance
+            response_text = self._apply_occasional_typo(response_text)
+        
+        return response_text
+    
+    def _apply_occasional_typo(self, text: str) -> str:
+        """Occasionally add realistic typos that get corrected"""
+        quirks = self.learning_engine.get_personality_quirks()
+        typos = quirks.get("typing_habits", {}).get("occasional_typos", {})
+        
+        import random
+        if typos and random.random() < 0.3:  # 30% chance when this method is called
+            typo_word = random.choice(list(typos.keys()))
+            correct_word = typos[typo_word]
+            
+            if correct_word.lower() in text.lower():
+                # Make the typo then correct it
+                text_with_typo = text.replace(correct_word, typo_word)
+                return f"{text_with_typo}\\n*{correct_word}"
+        
+        return text
+    
+    def _determine_context_type(self, original_message: str, response_text: str) -> str:
+        """Determine the context type for quirk selection"""
+        message_lower = original_message.lower()
+        response_lower = response_text.lower()
+        
+        # Check for agreement context
+        if any(word in response_lower for word in ["yes", "yeah", "exactly", "true", "agree", "right"]):
+            return "agreement"
+        
+        # Check for enthusiasm context
+        if any(word in message_lower for word in ["awesome", "cool", "amazing", "wow", "excited"]):
+            return "enthusiasm"
+        
+        # Check for thinking context
+        if any(word in message_lower for word in ["think", "opinion", "what do you", "how do you"]):
+            return "thinking"
+        
+        return "general"
     
     @commands.command(name='ai_stats')
     @commands.has_permissions(administrator=True)

@@ -34,6 +34,11 @@ class ContextBuilder:
         context_parts.append(user_context)
         estimated_tokens += self._estimate_tokens(user_context)
         
+        # Priority 2.3: Izumi's current mood and personality state (HIGH PRIORITY)
+        personality_context = self._get_personality_context(user_id, current_message)
+        context_parts.append(personality_context)
+        estimated_tokens += self._estimate_tokens(personality_context)
+        
         # Priority 2.5: Check if asking about another person (HIGH PRIORITY)
         person_query_context = self._get_person_query_context(current_message, guild_id)
         if person_query_context:
@@ -246,6 +251,61 @@ class ContextBuilder:
                         return f"🔍 PERSON QUERY RESULT: {search_result}"
         
         return ""
+    
+    def _get_personality_context(self, user_id: int, current_message: str) -> str:
+        """Get Izumi's current mood, personality state, and behavioral context"""
+        context_parts = []
+        
+        # Get current mood and energy
+        mood_data = self.unified_memory.get_daily_mood()
+        time_personality = self.unified_memory.get_time_personality()
+        
+        # Add mood context
+        mood_desc = mood_data.get('mood_description', 'feeling neutral')
+        time_context = mood_data.get('time_context', '')
+        context_parts.append(f"Currently {mood_desc} with {time_context}")
+        
+        # Add time-based personality
+        personality_note = time_personality.get('personality_note', '')
+        if personality_note:
+            context_parts.append(f"Time personality: {personality_note}")
+        
+        # Check for memory recall opportunities
+        recall_opportunities = self.unified_memory.get_memory_recall_opportunities(user_id, current_message)
+        if recall_opportunities:
+            context_parts.append(f"Memory recall options: {'; '.join(recall_opportunities[:1])}")  # Just one to avoid overwhelming
+        
+        # Check for emotional follow-ups
+        emotional_followups = self.unified_memory.get_emotional_followups(user_id)
+        if emotional_followups:
+            context_parts.append(f"Emotional follow-up: {emotional_followups[0]}")
+        
+        # Get conversation energy analysis if we have recent messages
+        if hasattr(self.unified_memory, 'recent_messages') and self.unified_memory.recent_messages:
+            channel_messages = []
+            for channel_msgs in self.unified_memory.recent_messages.values():
+                channel_messages.extend(channel_msgs[-5:])  # Last 5 from each channel
+            
+            if channel_messages:
+                energy_analysis = self.unified_memory.analyze_conversation_energy(channel_messages)
+                energy_rec = energy_analysis.get('recommendation', '')
+                if energy_rec and energy_rec != 'normal conversation':
+                    context_parts.append(f"Conversation energy: {energy_rec}")
+        
+        # Check for server events to celebrate
+        server_events = self.unified_memory.check_server_events(0)  # Guild ID not needed for general checks
+        if server_events:
+            context_parts.append(f"Server celebration opportunity: {server_events[0]}")
+        
+        # Get curiosity questions for the current context
+        curiosity_questions = self.unified_memory.generate_curiosity_questions(current_message, user_id)
+        if curiosity_questions:
+            context_parts.append(f"Conversation extenders available: {'; '.join(curiosity_questions[:2])}")
+        
+        if context_parts:
+            return f"🎭 IZUMI'S CURRENT STATE: {' | '.join(context_parts)}"
+        
+        return "🎭 IZUMI'S CURRENT STATE: feeling normal and ready to chat"
     
     def _estimate_tokens(self, text: str) -> int:
         """Rough token estimation (approximately 4 characters per token)"""

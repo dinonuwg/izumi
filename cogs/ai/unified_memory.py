@@ -1323,3 +1323,412 @@ class UnifiedMemorySystem:
                     info_parts.append(f"Positive Sentiment: {pos_pct}%")
         
         return " | ".join(info_parts) if info_parts else f"User {user_id} is known but no detailed information stored"
+
+    # ===== PERSONALITY & MOOD SYSTEMS =====
+    
+    def get_daily_mood(self) -> dict:
+        """Get Izumi's current mood based on interactions, time, and randomness"""
+        import random
+        from datetime import datetime
+        
+        current_time = datetime.now()
+        hour = current_time.hour
+        
+        # Get recent interaction data
+        recent_interactions = self._get_recent_interaction_count()
+        daily_messages = self._get_daily_message_count()
+        
+        # Base mood probabilities
+        mood_weights = {
+            "energetic": 0.3,
+            "playful": 0.25,
+            "thoughtful": 0.2,
+            "sleepy": 0.15,
+            "excited": 0.1
+        }
+        
+        # Time-based adjustments
+        if 6 <= hour <= 10:  # Morning
+            mood_weights["energetic"] += 0.3
+            mood_weights["sleepy"] -= 0.1
+        elif 11 <= hour <= 17:  # Afternoon
+            mood_weights["playful"] += 0.2
+            mood_weights["thoughtful"] += 0.1
+        elif 18 <= hour <= 22:  # Evening
+            mood_weights["thoughtful"] += 0.2
+            mood_weights["playful"] += 0.1
+        else:  # Late night
+            mood_weights["sleepy"] += 0.4
+            mood_weights["energetic"] -= 0.3
+        
+        # Interaction-based adjustments
+        if recent_interactions > 10:
+            mood_weights["excited"] += 0.2
+            mood_weights["energetic"] += 0.1
+        elif recent_interactions < 3:
+            mood_weights["thoughtful"] += 0.15
+            mood_weights["sleepy"] += 0.1
+        
+        # Normalize weights
+        total_weight = sum(mood_weights.values())
+        mood_weights = {k: max(0, v/total_weight) for k, v in mood_weights.items()}
+        
+        # Select mood based on weights
+        rand = random.random()
+        cumulative = 0
+        selected_mood = "playful"  # default
+        
+        for mood, weight in mood_weights.items():
+            cumulative += weight
+            if rand <= cumulative:
+                selected_mood = mood
+                break
+        
+        # Calculate energy level (0.0 - 1.0)
+        energy_base = {"energetic": 0.9, "playful": 0.7, "excited": 0.8, "thoughtful": 0.5, "sleepy": 0.2}
+        energy_level = energy_base.get(selected_mood, 0.6)
+        
+        # Time adjustments for energy
+        if hour < 6 or hour > 23:
+            energy_level *= 0.3
+        elif 6 <= hour <= 10:
+            energy_level *= 1.2
+        elif 18 <= hour <= 22:
+            energy_level *= 0.8
+        
+        energy_level = min(1.0, max(0.1, energy_level))
+        
+        return {
+            "current_mood": selected_mood,
+            "energy_level": energy_level,
+            "mood_description": self._get_mood_description(selected_mood, energy_level),
+            "time_context": self._get_time_context(hour)
+        }
+    
+    def _get_mood_description(self, mood: str, energy: float) -> str:
+        """Get description of current mood for AI context"""
+        descriptions = {
+            "energetic": f"feeling very energetic and upbeat (energy: {energy:.1f})",
+            "playful": f"in a playful, fun mood (energy: {energy:.1f})",
+            "thoughtful": f"feeling contemplative and thoughtful (energy: {energy:.1f})",
+            "sleepy": f"feeling a bit sleepy and relaxed (energy: {energy:.1f})",
+            "excited": f"feeling excited and enthusiastic (energy: {energy:.1f})"
+        }
+        return descriptions.get(mood, f"in a {mood} mood (energy: {energy:.1f})")
+    
+    def get_time_personality(self) -> dict:
+        """Get time-aware personality adjustments"""
+        from datetime import datetime
+        hour = datetime.now().hour
+        
+        if 6 <= hour <= 10:    # Morning
+            return {
+                "energy": "high",
+                "style": "cheerful and bright",
+                "greeting_style": ["morning!", "good morning!", "hey there!", "rise and shine!"],
+                "personality_note": "naturally energetic and optimistic in the morning"
+            }
+        elif 11 <= hour <= 17: # Afternoon  
+            return {
+                "energy": "medium-high",
+                "style": "casual and friendly",
+                "greeting_style": ["hey!", "hey there!", "sup!", "hi!"],
+                "personality_note": "relaxed and sociable during the day"
+            }
+        elif 18 <= hour <= 22: # Evening
+            return {
+                "energy": "medium",
+                "style": "cozy and warm",
+                "greeting_style": ["good evening~", "evening!", "hey~", "hi there~"],
+                "personality_note": "more relaxed and cozy in the evening"
+            }
+        else:                  # Late night
+            return {
+                "energy": "low",
+                "style": "quiet and sleepy",
+                "greeting_style": ["*yawn* hey...", "oh hi...", "hey there... *tired*", "sup... kinda tired"],
+                "personality_note": "sleepy and more subdued at night"
+            }
+    
+    def _get_time_context(self, hour: int) -> str:
+        """Get time context description"""
+        if 6 <= hour <= 10:
+            return "early morning energy"
+        elif 11 <= hour <= 17:
+            return "afternoon casual vibes"
+        elif 18 <= hour <= 22:
+            return "evening relaxation"
+        else:
+            return "late night sleepiness"
+    
+    def _get_recent_interaction_count(self) -> int:
+        """Count interactions in the last 2 hours"""
+        current_time = time.time()
+        cutoff_time = current_time - (2 * 3600)  # 2 hours ago
+        
+        count = 0
+        for user_data in self.memory_data.get('users', {}).values():
+            last_interaction = user_data.get('activity', {}).get('last_interaction', 0)
+            if last_interaction > cutoff_time:
+                count += 1
+        
+        return count
+    
+    def _get_daily_message_count(self) -> int:
+        """Count messages Izumi has seen today"""
+        # This would need to be tracked separately, for now return estimate
+        return self._get_recent_interaction_count() * 3
+    
+    def get_memory_recall_opportunities(self, user_id: int, current_topic: str = None) -> list:
+        """Find past conversations to reference naturally"""
+        user_id_str = str(user_id)
+        
+        if user_id_str not in self.memory_data.get('users', {}):
+            return []
+        
+        user_data = self.memory_data['users'][user_id_str]
+        learning_data = user_data.get('learning_data', {})
+        
+        callbacks = []
+        current_time = time.time()
+        
+        # Check for unfinished topics from recent conversations
+        topic_interests = learning_data.get('topic_interests', {})
+        for topic, data in topic_interests.items():
+            last_mention = data.get('last_mentioned', 0)
+            days_ago = (current_time - last_mention) / 86400
+            
+            if 1 <= days_ago <= 14:  # 1-14 days ago
+                if days_ago <= 3:
+                    callbacks.append(f"oh btw, how did that {topic} thing go that you mentioned?")
+                elif days_ago <= 7:
+                    callbacks.append(f"speaking of {topic}, didn't you say you were working on something with that?")
+                else:
+                    callbacks.append(f"this reminds me of when we talked about {topic} last week!")
+        
+        # Check for emotional follow-ups
+        sentiment_data = learning_data.get('sentiment_patterns', {})
+        recent_sentiments = sentiment_data.get('recent_emotions', [])
+        
+        for emotion_entry in recent_sentiments[-3:]:  # Last 3 emotional moments
+            emotion_time = emotion_entry.get('timestamp', 0)
+            emotion_type = emotion_entry.get('emotion', '')
+            days_ago = (current_time - emotion_time) / 86400
+            
+            if 1 <= days_ago <= 7:  # Follow up within a week
+                if emotion_type in ['stressed', 'worried', 'sad']:
+                    callbacks.append("hey, how are you feeling today? you seemed stressed yesterday 💙")
+                elif emotion_type in ['excited', 'happy']:
+                    callbacks.append("you seemed really excited about something yesterday! how's it going?")
+        
+        # Check for milestone acknowledgments
+        activity = user_data.get('activity', {})
+        message_count = learning_data.get('activity_patterns', {}).get('message_count', 0)
+        
+        if message_count > 0 and message_count % 100 == 0:  # Every 100 messages
+            callbacks.append(f"wow you've sent {message_count} messages! you're really active here!")
+        
+        return callbacks[:2]  # Return max 2 callbacks to avoid overwhelming
+    
+    def get_emotional_followups(self, user_id: int) -> list:
+        """Generate follow-ups based on past emotional interactions"""
+        user_id_str = str(user_id)
+        
+        if user_id_str not in self.memory_data.get('users', {}):
+            return []
+        
+        user_data = self.memory_data['users'][user_id_str]
+        learning_data = user_data.get('learning_data', {})
+        sentiment_data = learning_data.get('sentiment_patterns', {})
+        recent_emotions = sentiment_data.get('recent_emotions', [])
+        
+        followups = []
+        current_time = time.time()
+        
+        for emotion_entry in recent_emotions[-5:]:  # Check last 5 emotional interactions
+            emotion_time = emotion_entry.get('timestamp', 0)
+            emotion_type = emotion_entry.get('emotion', '')
+            emotion_context = emotion_entry.get('context', '')
+            hours_ago = (current_time - emotion_time) / 3600
+            
+            if 12 <= hours_ago <= 72:  # 12 hours to 3 days ago
+                if emotion_type == 'stressed':
+                    followups.append("how are you feeling today? you seemed really stressed before")
+                elif emotion_type == 'excited' and 'project' in emotion_context.lower():
+                    followups.append("how's that project going that you were excited about? 😊")
+                elif emotion_type == 'sad':
+                    followups.append("hope you're feeling better today 💙")
+                elif emotion_type == 'worried':
+                    followups.append("hey, how did that thing you were worried about turn out?")
+        
+        return followups[:1]  # Return max 1 followup to be subtle
+    
+    def check_server_events(self, guild_id: int) -> list:
+        """Notice and celebrate server events"""
+        events = []
+        
+        # Check for server activity milestones
+        total_users = len(self.memory_data.get('users', {}))
+        if total_users > 0 and total_users % 10 == 0:
+            events.append(f"wow we have {total_users} people in our memory now! the server is growing! 🎉")
+        
+        # Check for high activity day
+        recent_count = self._get_recent_interaction_count()
+        if recent_count > 15:
+            events.append("wow everyone's really active today! i love when the server is buzzing ✨")
+        
+        return events
+    
+    def generate_curiosity_questions(self, context: str, user_id: int = None) -> list:
+        """Generate natural follow-up questions to keep conversations going"""
+        questions = []
+        context_lower = context.lower()
+        
+        # Topic-specific curiosity
+        if any(word in context_lower for word in ['like', 'love', 'enjoy', 'favorite']):
+            questions.extend([
+                "ooh that's really interesting! how did you get into that?",
+                "what's your favorite part about it?",
+                "have you always been interested in that?",
+                "tell me more about that!"
+            ])
+        
+        if any(word in context_lower for word in ['working on', 'building', 'making', 'creating']):
+            questions.extend([
+                "that sounds so cool! what's it like working on that?",
+                "how long have you been working on it?",
+                "can you tell me more about the process?"
+            ])
+        
+        if any(word in context_lower for word in ['learned', 'studying', 'school', 'class']):
+            questions.extend([
+                "that's awesome! is it hard to learn?",
+                "what's the most interesting thing you've learned so far?",
+                "are you enjoying it?"
+            ])
+        
+        # General conversation extenders
+        general_questions = [
+            "that sounds really fun!",
+            "i'd love to hear more about that!",
+            "what made you decide to try that?",
+            "that's so cool!",
+            "how's that been going for you?"
+        ]
+        
+        questions.extend(general_questions)
+        
+        return questions[:3]  # Return max 3 options
+    
+    def analyze_conversation_energy(self, recent_messages: list) -> dict:
+        """Determine conversation energy and tone for appropriate responses"""
+        if not recent_messages:
+            return {"energy": "neutral", "tone": "casual", "recommendation": "normal"}
+        
+        # Analyze message content and frequency
+        message_texts = [msg.get('content', '') for msg in recent_messages[-10:]]  # Last 10 messages
+        combined_text = ' '.join(message_texts).lower()
+        
+        # Check for serious/heavy topics
+        serious_keywords = ['problem', 'issue', 'worried', 'stressed', 'help', 'difficult', 'serious', 'important']
+        if any(keyword in combined_text for keyword in serious_keywords):
+            return {
+                "energy": "low",
+                "tone": "serious",
+                "recommendation": "be thoughtful and supportive"
+            }
+        
+        # Check for playful/fun energy
+        playful_keywords = ['lol', 'haha', 'funny', 'joke', 'lmao', '😂', '🤣', 'fun', 'awesome', 'cool']
+        playful_count = sum(1 for keyword in playful_keywords if keyword in combined_text)
+        
+        if playful_count >= 3:
+            return {
+                "energy": "high",
+                "tone": "playful",
+                "recommendation": "be energetic and join the fun"
+            }
+        
+        # Check for argument/tension
+        tension_keywords = ['disagree', 'wrong', 'actually', 'but', 'however', 'no way', "that's not"]
+        if sum(1 for keyword in tension_keywords if keyword in combined_text) >= 2:
+            return {
+                "energy": "medium",
+                "tone": "tense",
+                "recommendation": "stay neutral or try to lighten mood"
+            }
+        
+        # Default to casual
+        return {
+            "energy": "medium",
+            "tone": "casual",
+            "recommendation": "normal conversation"
+        }
+    
+    def get_personality_quirks(self) -> dict:
+        """Get Izumi's personality quirks and habits for consistent behavior"""
+        return {
+            "favorite_phrases": [
+                "that's so cool!",
+                "ooh interesting!",
+                "wait really?",
+                "no way!",
+                "omg yes!",
+                "fr fr",
+                "that's awesome!",
+                "i love that!",
+                "yesss!"
+            ],
+            "typing_habits": {
+                "occasional_typos": {"recieve": "receive", "definately": "definitely", "seperate": "separate"},
+                "thinking_indicators": ["hmm...", "let me think...", "..."],
+                "excitement_expressions": ["!!", "omg", "yess", "wooo"],
+                "confusion_expressions": ["??", "wait what", "huh?", "confused"]
+            },
+            "topic_preferences": {
+                "anime": {"excitement_level": 0.9, "emoji": "✨"},
+                "gaming": {"excitement_level": 0.8, "emoji": "🎮"},
+                "osu": {"excitement_level": 1.0, "emoji": "🎵"},
+                "programming": {"excitement_level": 0.7, "emoji": "💻"},
+                "art": {"excitement_level": 0.8, "emoji": "🎨"},
+                "music": {"excitement_level": 0.9, "emoji": "🎶"}
+            },
+            "speech_patterns": {
+                "agreement": ["exactly!", "yes!", "so true!", "fr!", "this!"],
+                "disagreement": ["hmm not sure about that", "i think differently", "interesting perspective but..."],
+                "thinking": ["lemme think...", "hmm...", "that's a good question..."],
+                "enthusiasm": ["omg!", "yess!", "that's amazing!", "so cool!"]
+            }
+        }
+    
+    def should_use_quirk(self, context_type: str, mood: dict) -> dict:
+        """Determine if and which personality quirk to use based on context and mood"""
+        quirks = self.get_personality_quirks()
+        energy_level = mood.get('energy_level', 0.5)
+        current_mood = mood.get('current_mood', 'neutral')
+        
+        import random
+        
+        result = {"use_quirk": False, "quirk_type": None, "quirk_content": None}
+        
+        # Higher energy = more likely to use quirks
+        quirk_chance = energy_level * 0.7  # 0-70% chance based on energy
+        
+        if random.random() < quirk_chance:
+            result["use_quirk"] = True
+            
+            # Select quirk type based on context
+            if context_type == "agreement" and random.random() < 0.8:
+                result["quirk_type"] = "agreement"
+                result["quirk_content"] = random.choice(quirks["speech_patterns"]["agreement"])
+            elif context_type == "enthusiasm" and energy_level > 0.6:
+                result["quirk_type"] = "enthusiasm" 
+                result["quirk_content"] = random.choice(quirks["speech_patterns"]["enthusiasm"])
+            elif context_type == "thinking" and random.random() < 0.3:
+                result["quirk_type"] = "thinking"
+                result["quirk_content"] = random.choice(quirks["speech_patterns"]["thinking"])
+            elif context_type == "general" and random.random() < 0.4:
+                result["quirk_type"] = "favorite_phrase"
+                result["quirk_content"] = random.choice(quirks["favorite_phrases"])
+        
+        return result
