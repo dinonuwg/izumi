@@ -13,7 +13,7 @@ import asyncio
 from typing import Dict, Optional
 
 from .learning_engine import LearningEngine
-from .context_builder_fixed import ContextBuilder
+from .context_builder import ContextBuilder
 from utils.helpers import save_json, load_json
 
 class IzumiAI(commands.Cog):

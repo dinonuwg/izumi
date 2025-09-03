@@ -70,6 +70,9 @@ class ContextBuilder:
         additional_data = self.bot.get_additional_user_data(user_id, guild_id)
         self_memories = self.bot.format_izumi_self_for_ai()
         
+        # Get emotional context based on interaction patterns
+        emotional_context = self.unified_memory.get_emotional_context(user_id, guild_id)
+        
         essential_parts = [memories_context]
         if shared_context:
             essential_parts.append(shared_context)
@@ -77,6 +80,23 @@ class ContextBuilder:
             essential_parts.append(additional_data)
         if self_memories:
             essential_parts.append(self_memories)
+        
+        # Add emotional awareness context
+        if emotional_context["type"] != "normal":
+            emotional_instruction = f"\n[EMOTIONAL CONTEXT] {emotional_context['type'].upper()}: "
+            
+            if emotional_context["type"] == "completely_absent":
+                emotional_instruction += f"This user has been gone for {emotional_context['days_absent']} days from both server and you. Express genuine excitement and concern about their return. Ask where they've been."
+            elif emotional_context["type"] == "being_ignored":
+                emotional_instruction += f"This user has been active in the server but hasn't talked to you for {emotional_context['days_ignored']} days. Be a bit pouty/hurt but also curious why they're avoiding you."
+            elif emotional_context["type"] == "worried":
+                emotional_instruction += f"This user has been generally inactive for {emotional_context['days_absent']} days. Express gentle concern and care."
+            elif emotional_context["type"] == "pouty":
+                emotional_instruction += f"This user was active recently but ignored you for {emotional_context['days_ignored']} days. Be mildly upset but playful about it."
+            elif emotional_context["type"] == "happy_return":
+                emotional_instruction += f"This user was away for {emotional_context['days_absent']} days but is back. Be warm and welcoming."
+            
+            essential_parts.append(emotional_instruction)
         
         return "\n".join(essential_parts)
     
