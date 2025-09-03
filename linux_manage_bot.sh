@@ -36,11 +36,14 @@ case "$1" in
         ;;
     update)
         echo "📦 Updating $BOT_NAME..."
+        sudo systemctl stop $BOT_NAME
         cd /opt/$BOT_NAME
         git pull
         source venv/bin/activate
-        pip install -r requirements.txt
+        echo "🔄 Installing/updating Python dependencies..."
+        pip install -r requirements.txt --upgrade --quiet
         sudo systemctl restart $BOT_NAME
+        sudo systemctl status $BOT_NAME --no-pager -l
         ;;
     backup)
         echo "💾 Creating backup..."
