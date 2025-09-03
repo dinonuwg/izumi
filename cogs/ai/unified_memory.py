@@ -187,6 +187,111 @@ class UnifiedMemorySystem:
             }
         }
     
+    async def _update_dynamic_trust_level(self, user_id_str: str, content: str, timestamp):
+        """Update trust level dynamically based on user behavior patterns"""
+        import time
+        
+        user_data = self.memory_data['users'][user_id_str]
+        current_trust = user_data['social']['trust_level']
+        last_interaction = user_data['activity']['last_interaction']
+        current_time = int(timestamp.timestamp())
+        
+        # Initialize trust change
+        trust_change = 0
+        
+        # 1. TIME DECAY - Trust decreases over time without interaction
+        if last_interaction > 0:
+            days_since_last = (current_time - last_interaction) / 86400  # seconds to days
+            
+            if days_since_last > 30:  # More than 30 days
+                trust_change -= 2
+            elif days_since_last > 14:  # More than 2 weeks
+                trust_change -= 1
+            elif days_since_last > 7:  # More than 1 week
+                trust_change -= 0.5
+        
+        # 2. MESSAGE ENGAGEMENT - Longer, thoughtful messages = more trust
+        message_length = len(content.strip())
+        if message_length > 100:  # Long thoughtful message
+            trust_change += 0.3
+        elif message_length > 50:  # Medium message
+            trust_change += 0.2
+        elif message_length > 10:  # Short but substantial
+            trust_change += 0.1
+        elif message_length <= 3:  # Very short message (like "ok", "lol")
+            trust_change -= 0.1
+        
+        # 3. SENTIMENT ANALYSIS - Positive messages increase trust
+        content_lower = content.lower()
+        
+        # Positive indicators
+        positive_words = ['thanks', 'thank you', 'appreciate', 'love', 'great', 'awesome', 
+                         'good', 'nice', 'please', 'sorry', 'help', 'wonderful', 'amazing']
+        negative_words = ['hate', 'stupid', 'dumb', 'shut up', 'annoying', 'bad', 'terrible',
+                         'awful', 'suck', 'worst', 'fuck', 'shit', 'damn']
+        
+        positive_count = sum(1 for word in positive_words if word in content_lower)
+        negative_count = sum(1 for word in negative_words if word in content_lower)
+        
+        if positive_count > negative_count:
+            trust_change += 0.2 * positive_count
+        elif negative_count > positive_count:
+            trust_change -= 0.3 * negative_count
+        
+        # 4. CONSISTENCY BONUS - Regular interaction patterns
+        learning_data = user_data.get('learning_data', {})
+        activity_patterns = learning_data.get('activity_patterns', {})
+        
+        if activity_patterns.get('message_count', 0) > 10:  # Has history
+            # Small bonus for consistent users
+            trust_change += 0.1
+        
+        # 5. APPLY TRUST CHANGE with bounds checking
+        new_trust = current_trust + trust_change
+        new_trust = max(0, min(10, new_trust))  # Clamp between 0 and 10
+        
+        # Only update if there's a meaningful change
+        if abs(new_trust - current_trust) >= 0.1:
+            user_data['social']['trust_level'] = round(new_trust * 10) / 10  # Round to 1 decimal
+            
+            # Log significant trust changes for debugging
+            if abs(trust_change) >= 0.5:
+                print(f"Trust level change for {user_id_str}: {current_trust:.1f} → {new_trust:.1f} (Δ{trust_change:+.1f})")
+    
+    async def decay_inactive_trust_levels(self):
+        """Decay trust levels for users who haven't been active recently"""
+        import time
+        current_time = int(time.time())
+        decay_count = 0
+        
+        for user_id_str, user_data in self.memory_data['users'].items():
+            last_interaction = user_data['activity']['last_interaction']
+            current_trust = user_data['social']['trust_level']
+            
+            if last_interaction > 0 and current_trust > 0:
+                days_inactive = (current_time - last_interaction) / 86400
+                
+                # Decay trust for long-term inactive users
+                trust_decay = 0
+                if days_inactive > 60:  # 2 months
+                    trust_decay = 1.0
+                elif days_inactive > 30:  # 1 month  
+                    trust_decay = 0.5
+                elif days_inactive > 14:  # 2 weeks
+                    trust_decay = 0.2
+                
+                if trust_decay > 0:
+                    new_trust = max(0, current_trust - trust_decay)
+                    user_data['social']['trust_level'] = round(new_trust * 10) / 10
+                    decay_count += 1
+                    print(f"Decayed trust for inactive user {user_id_str}: {current_trust:.1f} → {new_trust:.1f} ({days_inactive:.0f} days inactive)")
+        
+        if decay_count > 0:
+            self.pending_saves = True
+            print(f"Decayed trust levels for {decay_count} inactive users")
+    
+    
+    
     def save_unified_data(self, data: Dict = None):
         """Save unified memory data"""
         if data is None:
@@ -363,10 +468,8 @@ class UnifiedMemorySystem:
         # Update last interaction time
         self.memory_data['users'][user_id_str]['activity']['last_interaction'] = int(timestamp.timestamp())
         
-        # Update trust level - increment by 1 for each message, max 10
-        current_trust = self.memory_data['users'][user_id_str]['social']['trust_level']
-        if current_trust < 10:
-            self.memory_data['users'][user_id_str]['social']['trust_level'] = min(current_trust + 1, 10)
+        # Dynamic trust level calculation
+        await self._update_dynamic_trust_level(user_id_str, content, timestamp)
         
         self.pending_saves = True
         

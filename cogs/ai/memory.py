@@ -769,6 +769,20 @@ class MemoryManagement(commands.Cog):
         
         embed.set_footer(text=f"Total entries: {len(knowledge_list)}")
         await ctx.send(embed=embed)
+    
+    @memory.command(name='decay_trust')
+    @commands.has_permissions(administrator=True)
+    async def decay_trust_levels(self, ctx):
+        """Manually trigger trust level decay for inactive users (Admin only)"""
+        await ctx.send("🔄 Running trust level decay for inactive users...")
+        
+        try:
+            await self.bot.unified_memory.decay_inactive_trust_levels()
+            await ctx.send("✅ Trust level decay completed! Check console for details.")
+        except Exception as e:
+            await ctx.send(f"❌ Error during trust decay: {e}")
+    
+    @commands.command(name='export_self_memories')
     @commands.has_permissions(administrator=True)
     async def export_self_memories(self, ctx):
         """Export Izumi's self-memories as JSON (admin only)"""
