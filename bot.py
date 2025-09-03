@@ -1,4 +1,4 @@
-# auto-install dependencies if missing
+# auto-install dependencies if missing - test
 # pretty cool system that checks for packages and installs them automatically
 import subprocess
 import sys
