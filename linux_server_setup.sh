@@ -92,8 +92,15 @@ create_bot_user() {
     if id "$BOT_USER" &>/dev/null; then
         print_warning "User '$BOT_USER' already exists"
     else
-        useradd -r -s /bin/bash -d "$BOT_DIR" -m "$BOT_USER"
+        # Create system user with home directory
+        useradd -r -s /bin/bash -d "$BOT_DIR" "$BOT_USER"
         print_success "User '$BOT_USER' created"
+    fi
+    
+    # Ensure the user can access /opt directory
+    # Add user to appropriate groups if needed
+    if ! groups "$BOT_USER" | grep -q "$BOT_USER"; then
+        print_status "Setting up user groups for '$BOT_USER'..."
     fi
 }
 
@@ -111,18 +118,31 @@ clone_repository() {
         read -p "Do you want to remove it and re-clone? (y/N): " -n 1 -r
         echo
         if [[ $REPLY =~ ^[Yy]$ ]]; then
+            print_status "Removing existing directory..."
             rm -rf "$BOT_DIR"
         else
             print_status "Updating existing repository..."
             cd "$BOT_DIR"
-            sudo -u "$BOT_USER" git pull
+            # Check if it's actually a git repo
+            if [ -d ".git" ]; then
+                sudo -u "$BOT_USER" git pull
+            else
+                print_error "Directory exists but is not a git repository"
+                return 1
+            fi
             return
         fi
     fi
     
-    # Clone into /opt with the bot name as the folder, repo will be inside it
-    cd "/opt"
-    sudo -u "$BOT_USER" git clone "$REPO_URL" "$BOT_NAME"
+    # Create the bot directory first with proper ownership
+    mkdir -p "$BOT_DIR"
+    chown "$BOT_USER:$BOT_USER" "$BOT_DIR"
+    
+    # Clone into the directory as the bot user
+    cd "$BOT_DIR"
+    sudo -u "$BOT_USER" git clone "$REPO_URL" .
+    
+    # Ensure all files are owned by bot user
     chown -R "$BOT_USER:$BOT_USER" "$BOT_DIR"
     print_success "Repository cloned successfully"
 }
@@ -182,12 +202,13 @@ setup_data_directory() {
     
     for file in "${data_files[@]}"; do
         if [ ! -f "data/$file" ]; then
-            sudo -u "$BOT_USER" echo "{}" > "data/$file"
+            sudo -u "$BOT_USER" bash -c "echo '{}' > data/$file"
         fi
     done
     
+    # Ensure proper ownership and permissions
     chown -R "$BOT_USER:$BOT_USER" data/
-    chmod -R 644 data/
+    chmod -R 644 data/*
     chmod 755 data/
     
     print_success "Data directory setup complete"
