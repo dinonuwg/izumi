@@ -94,8 +94,12 @@ class IzumiAI(commands.Cog):
         # ALWAYS learn from messages (even when not mentioned)
         await self.learning_engine.learn_from_message(message)
         
-        # Handle AI responses when mentioned
+        # Handle AI responses when directly mentioned with @
         if self.bot.user in message.mentions:
+            await self._handle_ai_response(message)
+        # Handle AI responses when "izumi" is mentioned by name (case insensitive)
+        elif "izumi" in message.content.lower():
+            print(f"🎯 Direct name mention detected in #{message.channel.name} - responding with 100% certainty")
             await self._handle_ai_response(message)
         else:
             # Check if someone mentioned "izumi" and she recently participated
