@@ -15,6 +15,12 @@ class MemoryManagement(commands.Cog):
     
     def __init__(self, bot):
         self.bot = bot
+    
+    def _truncate_field_value(self, value: str, max_length: int = 1000) -> str:
+        """Truncate field value to fit Discord's embed limits"""
+        if len(value) <= max_length:
+            return value
+        return value[:max_length-3] + "..."
 
     @commands.group(name='memory', invoke_without_command=True)
     async def memory(self, ctx):
@@ -711,25 +717,28 @@ class MemoryManagement(commands.Cog):
         if basic_info:
             embed.add_field(name="Basic Info", value="\n".join(basic_info), inline=False)
         
-        # Personality & preferences
+        # Personality & preferences (with truncation)
         if memories["interests"]:
+            interests_text = ", ".join(memories["interests"])
             embed.add_field(
                 name="Interests", 
-                value=", ".join(memories["interests"]), 
+                value=self._truncate_field_value(interests_text), 
                 inline=False
             )
         
         if memories["dislikes"]:
+            dislikes_text = ", ".join(memories["dislikes"])
             embed.add_field(
                 name="Dislikes", 
-                value=", ".join(memories["dislikes"]), 
+                value=self._truncate_field_value(dislikes_text), 
                 inline=False
             )
         
         if memories["personality_notes"]:
+            personality_text = ", ".join(memories["personality_notes"])
             embed.add_field(
                 name="Personality Notes", 
-                value=", ".join(memories["personality_notes"]), 
+                value=self._truncate_field_value(personality_text), 
                 inline=False
             )
         
@@ -742,29 +751,31 @@ class MemoryManagement(commands.Cog):
             inline=True
         )
         
-        # Other info
+        # Other info (with truncation)
         if memories["conversation_style"]:
             embed.add_field(
                 name="Communication Style", 
-                value=memories["conversation_style"], 
+                value=self._truncate_field_value(memories["conversation_style"]), 
                 inline=True
             )
         
         if memories["important_events"]:
+            events_text = "\n".join(memories["important_events"])
             embed.add_field(
                 name="Important Events", 
-                value="\n".join(memories["important_events"]), 
+                value=self._truncate_field_value(events_text), 
                 inline=False
             )
         
         if memories["custom_notes"]:
+            notes_text = "\n".join(memories["custom_notes"])
             embed.add_field(
                 name="Custom Notes", 
-                value="\n".join(memories["custom_notes"]), 
+                value=self._truncate_field_value(notes_text), 
                 inline=False
             )
         
-        # Social connections
+        # Social connections (with truncation)
         if memories.get("relationships"):
             relationship_info = []
             for other_user_id_str, relationship in memories["relationships"].items():
@@ -777,9 +788,10 @@ class MemoryManagement(commands.Cog):
                     continue
             
             if relationship_info:
+                rel_text = "\n".join(relationship_info[:5])  # Limit to 5
                 embed.add_field(
                     name="Known Relationships",
-                    value="\n".join(relationship_info[:5]),  # Limit to 5
+                    value=self._truncate_field_value(rel_text),
                     inline=False
                 )
         
@@ -791,14 +803,19 @@ class MemoryManagement(commands.Cog):
                     other_user = interaction.guild.get_member(other_user_id)
                     if other_user and experiences:
                         recent_experiences = experiences[-2:]  # Last 2 experiences
-                        shared_info.append(f"**{other_user.display_name}:** {'; '.join(recent_experiences)}")
+                        exp_text = '; '.join(recent_experiences)
+                        # Truncate each experience entry to avoid field overflow
+                        if len(exp_text) > 150:  # Limit per user
+                            exp_text = exp_text[:147] + "..."
+                        shared_info.append(f"**{other_user.display_name}:** {exp_text}")
                 except:
                     continue
             
             if shared_info:
+                shared_text = "\n".join(shared_info[:3])  # Limit to 3
                 embed.add_field(
                     name="Shared Experiences",
-                    value="\n".join(shared_info[:3]),  # Limit to 3
+                    value=self._truncate_field_value(shared_text),
                     inline=False
                 )
         
