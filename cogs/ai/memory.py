@@ -69,6 +69,21 @@ class MemoryManagement(commands.Cog):
         
         memories = self.bot.get_user_memories(user.id)
         
+        # DEBUG: Check memory data size
+        import json
+        memory_json = json.dumps(memories, ensure_ascii=False)
+        memory_size = len(memory_json)
+        print(f"DEBUG: Memory data size for {user.display_name}: {memory_size} characters")
+        
+        # Log problematic memory sections
+        if memory_size > 5000:
+            print(f"DEBUG: Large memory sections:")
+            for key, value in memories.items():
+                if isinstance(value, (list, dict, str)) and len(str(value)) > 500:
+                    print(f"  - {key}: {len(str(value))} chars")
+                    if isinstance(value, list) and len(value) > 20:
+                        print(f"    List has {len(value)} items - possible duplicates?")
+        
         # Check if user has any memories stored
         has_memories = any([
             memories.get("name"),
@@ -592,6 +607,109 @@ class MemoryManagement(commands.Cog):
         self.bot.update_izumi_self_memory("knowledge", info, append=True)
         await self.bot.save_immediately()  # Force immediate save for real-time updates
         await ctx.send(f"✅ Added to Izumi's knowledge: '{info}'")
+
+    @memory.command(name='cleanup')
+    @commands.has_permissions(administrator=True)
+    async def cleanup_duplicates(self, ctx, user: discord.Member = None):
+        """Remove duplicate entries from memory data (Admin only)"""
+        if user:
+            users_to_clean = [user.id]
+        else:
+            # Clean all users
+            try:
+                all_users = self.bot.unified_memory.memory_data.get('users', {})
+                users_to_clean = [int(uid) for uid in all_users.keys()]
+            except:
+                await ctx.send("Error accessing memory data!")
+                return
+        
+        cleaned_count = 0
+        for user_id in users_to_clean:
+            try:
+                memories = self.bot.get_user_memories(user_id)
+                cleaned = False
+                
+                # Clean list fields
+                for field in ['interests', 'dislikes', 'personality_notes', 'custom_notes', 'important_events']:
+                    if field in memories and isinstance(memories[field], list):
+                        original_length = len(memories[field])
+                        # Remove duplicates while preserving order
+                        cleaned_list = []
+                        for item in memories[field]:
+                            if item not in cleaned_list:
+                                cleaned_list.append(item)
+                        
+                        if len(cleaned_list) != original_length:
+                            # Update the cleaned list
+                            if field == 'interests':
+                                self.bot.unified_memory.memory_data['users'][str(user_id)]['personality']['interests'] = cleaned_list
+                            elif field == 'dislikes':
+                                self.bot.unified_memory.memory_data['users'][str(user_id)]['personality']['dislikes'] = cleaned_list
+                            elif field == 'personality_notes':
+                                self.bot.unified_memory.memory_data['users'][str(user_id)]['personality']['personality_notes'] = cleaned_list
+                            elif field == 'custom_notes':
+                                self.bot.unified_memory.memory_data['users'][str(user_id)]['activity']['custom_notes'] = cleaned_list
+                            elif field == 'important_events':
+                                self.bot.unified_memory.memory_data['users'][str(user_id)]['activity']['important_events'] = cleaned_list
+                            
+                            cleaned = True
+                            print(f"Cleaned {field} for user {user_id}: {original_length} -> {len(cleaned_list)}")
+                
+                if cleaned:
+                    cleaned_count += 1
+            
+            except Exception as e:
+                print(f"Error cleaning user {user_id}: {e}")
+                continue
+        
+        if cleaned_count > 0:
+            # Save cleaned data
+            self.bot.unified_memory.pending_saves = True
+            await self.bot.unified_memory.save_data()
+            await ctx.send(f"✅ Cleaned duplicate entries for {cleaned_count} users!")
+        else:
+            await ctx.send("No duplicates found to clean.")
+
+    @memory.command(name='debug')
+    @commands.has_permissions(administrator=True)
+    async def debug_memory(self, ctx, user: discord.Member):
+        """Debug memory data for a user (Admin only)"""
+        memories = self.bot.get_user_memories(user.id)
+        
+        # Create debug output
+        debug_info = []
+        debug_info.append(f"🔍 **Memory Debug for {user.display_name}**\n")
+        
+        for key, value in memories.items():
+            value_type = type(value).__name__
+            if isinstance(value, list):
+                debug_info.append(f"**{key}** ({value_type}): {len(value)} items")
+                if len(value) > 10:  # Suspicious large lists
+                    debug_info.append(f"  ⚠️ Large list detected!")
+                    # Show first few and last few items
+                    preview_items = value[:3] + ["..."] + value[-3:] if len(value) > 6 else value
+                    debug_info.append(f"  Sample: {preview_items}")
+            elif isinstance(value, dict):
+                debug_info.append(f"**{key}** ({value_type}): {len(value)} keys")
+                if len(value) > 20:  # Suspicious large dicts
+                    debug_info.append(f"  ⚠️ Large dict detected!")
+            elif isinstance(value, str):
+                debug_info.append(f"**{key}** ({value_type}): {len(value)} chars")
+                if len(value) > 1000:  # Suspicious large strings
+                    debug_info.append(f"  ⚠️ Large string detected!")
+                    debug_info.append(f"  Preview: {value[:100]}...")
+            else:
+                debug_info.append(f"**{key}** ({value_type}): {value}")
+        
+        debug_text = "\n".join(debug_info)
+        
+        # Split into chunks if too long
+        if len(debug_text) > 1900:
+            chunks = [debug_text[i:i+1900] for i in range(0, len(debug_text), 1900)]
+            for i, chunk in enumerate(chunks):
+                await ctx.send(f"```\nDebug Info (Part {i+1}/{len(chunks)}):\n{chunk}\n```")
+        else:
+            await ctx.send(f"```\n{debug_text}\n```")
 
     @memory.command(name='viewknowledge')
     async def view_knowledge(self, ctx):

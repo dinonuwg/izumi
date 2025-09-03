@@ -640,45 +640,53 @@ class LearningEngine:
         if user_id_str in self.learning_data['communication_styles']:
             style = self.learning_data['communication_styles'][user_id_str]
             
-            # Determine if formal or informal
-            if style['formality_level'] > 5:
+            # Get current personality notes to avoid duplicates
+            current_memories = self.bot.get_user_memories(user_id)
+            current_notes = current_memories.get('personality_notes', [])
+            
+            # Determine if formal or informal (only add if not already present)
+            if style['formality_level'] > 5 and "speaks formally" not in current_notes:
                 self.bot.update_user_memory(user_id, "personality_notes", "speaks formally", append=True)
-            elif style['formality_level'] < -5:
+            elif style['formality_level'] < -5 and "speaks casually" not in current_notes:
                 self.bot.update_user_memory(user_id, "personality_notes", "speaks casually", append=True)
             
-            # Average message length preference
+            # Average message length preference (only add if not already present)
             if style['verbosity_preference']:
                 avg_length = sum(style['verbosity_preference']) / len(style['verbosity_preference'])
-                if avg_length > 50:
+                if avg_length > 50 and "tends to write long messages" not in current_notes:
                     self.bot.update_user_memory(user_id, "personality_notes", "tends to write long messages", append=True)
-                elif avg_length < 10:
+                elif avg_length < 10 and "prefers short messages" not in current_notes:
                     self.bot.update_user_memory(user_id, "personality_notes", "prefers short messages", append=True)
         
-        # Update interests from topic learning
+        # Update interests from topic learning (check for duplicates)
         if user_id_str in self.learning_data['topic_interests']:
             interests = self.learning_data['topic_interests'][user_id_str]
+            current_interests = current_memories.get('interests', [])
             
-            # Gaming interests
+            # Gaming interests (only add if not already present)
             if interests['gaming_interests']:
                 top_gaming = max(interests['gaming_interests'], key=interests['gaming_interests'].get)
-                self.bot.update_user_memory(user_id, "interests", f"{top_gaming} games", append=True)
+                gaming_interest = f"{top_gaming} games"
+                if gaming_interest not in current_interests:
+                    self.bot.update_user_memory(user_id, "interests", gaming_interest, append=True)
             
-            # Tech interests
+            # Tech interests (only add if not already present)
             if interests['tech_interests']:
                 tech_terms = [term for term, count in interests['tech_interests'].items() if count > 2]
                 for term in tech_terms[:3]:  # Top 3
-                    self.bot.update_user_memory(user_id, "interests", term, append=True)
+                    if term not in current_interests:
+                        self.bot.update_user_memory(user_id, "interests", term, append=True)
         
-        # Update sentiment patterns
+        # Update sentiment patterns (check for duplicates)
         if user_id_str in self.learning_data['message_sentiment']:
             sentiment = self.learning_data['message_sentiment'][user_id_str]
             
             total_messages = sentiment['positive_indicators'] + sentiment['negative_indicators'] + sentiment.get('neutral_indicators', 0)
             if total_messages > 20:  # Enough data to make judgments
                 positive_ratio = sentiment['positive_indicators'] / total_messages
-                if positive_ratio > 0.7:
+                if positive_ratio > 0.7 and "generally positive and upbeat" not in current_notes:
                     self.bot.update_user_memory(user_id, "personality_notes", "generally positive and upbeat", append=True)
-                elif positive_ratio < 0.3:
+                elif positive_ratio < 0.3 and "tends to be more critical or negative" not in current_notes:
                     self.bot.update_user_memory(user_id, "personality_notes", "tends to be more critical or negative", append=True)
     
     def _trim_vocabulary_data(self, vocab: Dict):
