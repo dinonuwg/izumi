@@ -101,6 +101,11 @@ create_bot_user() {
 clone_repository() {
     print_status "Cloning repository to $BOT_DIR..."
     
+    # Check if parent directory exists, create if not
+    if [ ! -d "/opt" ]; then
+        mkdir -p "/opt"
+    fi
+    
     if [ -d "$BOT_DIR" ]; then
         print_warning "Directory $BOT_DIR already exists"
         read -p "Do you want to remove it and re-clone? (y/N): " -n 1 -r
@@ -115,7 +120,9 @@ clone_repository() {
         fi
     fi
     
-    sudo -u "$BOT_USER" git clone "$REPO_URL" "$BOT_DIR"
+    # Clone into /opt with the bot name as the folder, repo will be inside it
+    cd "/opt"
+    sudo -u "$BOT_USER" git clone "$REPO_URL" "$BOT_NAME"
     chown -R "$BOT_USER:$BOT_USER" "$BOT_DIR"
     print_success "Repository cloned successfully"
 }
