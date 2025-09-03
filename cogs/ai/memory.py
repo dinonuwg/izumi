@@ -69,21 +69,6 @@ class MemoryManagement(commands.Cog):
         
         memories = self.bot.get_user_memories(user.id)
         
-        # DEBUG: Check memory data size
-        import json
-        memory_json = json.dumps(memories, ensure_ascii=False)
-        memory_size = len(memory_json)
-        print(f"DEBUG: Memory data size for {user.display_name}: {memory_size} characters")
-        
-        # Log problematic memory sections
-        if memory_size > 5000:
-            print(f"DEBUG: Large memory sections:")
-            for key, value in memories.items():
-                if isinstance(value, (list, dict, str)) and len(str(value)) > 500:
-                    print(f"  - {key}: {len(str(value))} chars")
-                    if isinstance(value, list) and len(value) > 20:
-                        print(f"    List has {len(value)} items - possible duplicates?")
-        
         # Check if user has any memories stored
         has_memories = any([
             memories.get("name"),
