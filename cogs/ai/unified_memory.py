@@ -477,6 +477,10 @@ class UnifiedMemorySystem:
     
     
     
+    def save_memory(self):
+        """Alias for save_unified_data for compatibility"""
+        self.save_unified_data()
+
     def save_unified_data(self, data: Dict = None):
         """Save unified memory data"""
         if data is None:
@@ -485,6 +489,137 @@ class UnifiedMemorySystem:
         data['system_info']['last_updated'] = int(time.time())
         save_json(self.unified_data_file, data)
         self.pending_saves = False
+
+    # ==================== BIRTHDAY PING SYSTEM ====================
+    
+    async def send_random_birthday_ping(self, bot):
+        """Send random birthday pings throughout the 24-hour birthday period"""
+        from datetime import datetime, timezone
+        from utils.helpers import is_birthday_today_extended
+        import random
+        
+        utc_now = datetime.now(timezone.utc)
+        current_date = utc_now.strftime('%m-%d')
+        
+        # Check if we've sent a ping in the last 2 hours to avoid spam
+        last_ping_key = f'last_birthday_ping_{current_date}'
+        last_ping = self.memory_data.get(last_ping_key, 0)
+        if last_ping and (utc_now.timestamp() - last_ping) < 7200:  # 2 hours cooldown
+            return None
+        
+        birthday_users = []
+        
+        # Check bot's birthday data (primary source)
+        if hasattr(bot, 'birthdays'):
+            for user_id_str, birthday_data in bot.birthdays.items():
+                if isinstance(birthday_data, dict):
+                    month = birthday_data.get('month')
+                    day = birthday_data.get('day')
+                    year = birthday_data.get('year')
+                    
+                    if month and day and is_birthday_today_extended(month, day, year):
+                        birthday_users.append({
+                            'user_id': user_id_str,
+                            'month': month,
+                            'day': day,
+                            'year': year
+                        })
+        
+        # Also check unified memory (backup source)
+        for user_id_str, user_data in self.memory_data.get('users', {}).items():
+            basic_info = user_data.get('basic_info', {})
+            if basic_info.get('birthday'):
+                birthday_date = basic_info['birthday']
+                if birthday_date == current_date:
+                    # Add if not already found
+                    if not any(u['user_id'] == user_id_str for u in birthday_users):
+                        birthday_users.append({
+                            'user_id': user_id_str,
+                            'month': int(birthday_date.split('-')[0]),
+                            'day': int(birthday_date.split('-')[1]),
+                            'year': None
+                        })
+        
+        if not birthday_users:
+            return None
+            
+        # Pick a random birthday user
+        chosen_user = random.choice(birthday_users)
+        chosen_user_id = int(chosen_user['user_id'])
+        
+        # Find an appropriate channel (preferably where they're active)
+        target_channel = await self._find_birthday_ping_channel(bot, chosen_user_id)
+        if not target_channel:
+            return None
+            
+        # Generate age-aware birthday messages
+        user = bot.get_user(chosen_user_id)
+        if not user:
+            return None
+            
+        age_context = ""
+        if chosen_user['year']:
+            current_year = utc_now.year
+            age = current_year - chosen_user['year']
+            if age > 0:
+                age_context = f" (turning {age})" if age < 100 else ""
+        
+        # Birthday messages with optional age context
+        birthday_messages = [
+            f"🎂 Hey {user.mention}! Hope you're having an amazing birthday{age_context}! ✨",
+            f"🎉 Happy birthday {user.mention}! 🥳 Hope your special day is wonderful{age_context}!",
+            f"✨ {user.mention}! It's your birthday{age_context}! 🎂 Hope you're celebrating properly! 🎉",
+            f"🎈 Birthday vibes for {user.mention}! 🎂 Hope you're having the best day ever{age_context}!",
+            f"🥳 {user.mention}! Another year older, another year more awesome{age_context}! Happy birthday! 🎂",
+            f"🎊 {user.mention}! Hope your birthday{age_context} is filled with cake, fun, and everything you love! 🎂",
+            f"🌟 Happy birthday {user.mention}! 🎂 May this year bring you lots of happiness{age_context}! ✨",
+            f"🎂 {user.mention}! Sending you birthday wishes and virtual cake! 🍰 Hope it's amazing{age_context}!",
+            f"🎉 It's {user.mention}'s special day{age_context}! 🎂 Hope you're surrounded by friends and cake! 🥳",
+            f"🎈 {user.mention}! Another trip around the sun{age_context}! 🌟 Happy birthday! 🎂"
+        ]
+        
+        try:
+            message = random.choice(birthday_messages)
+            await target_channel.send(message)
+            
+            # Log the ping time
+            self.memory_data[last_ping_key] = utc_now.timestamp()
+            self.pending_saves = True
+            
+            age_info = f" (age {age})" if chosen_user['year'] else ""
+            return f"Sent birthday ping to {user.display_name}{age_info} in {target_channel.name}"
+            
+        except Exception as e:
+            print(f"Error sending birthday ping: {e}")
+            
+        return None
+    
+    async def _find_birthday_ping_channel(self, bot, user_id):
+        """Find the best channel to send a birthday ping"""
+        # Priority 1: Channel where user has been recently active
+        if hasattr(self, 'recent_messages'):
+            for channel_id, messages in self.recent_messages.items():
+                for msg in reversed(messages[-20:]):  # Recent messages
+                    if msg.get('user_id') == user_id:
+                        channel = bot.get_channel(channel_id)
+                        if channel:
+                            return channel
+        
+        # Priority 2: General/main channels
+        for guild in bot.guilds:
+            member = guild.get_member(user_id)
+            if member:
+                for channel in guild.text_channels:
+                    if channel.name.lower() in ['general', 'main', 'chat', 'lounge', 'birthday']:
+                        if channel.permissions_for(guild.me).send_messages:
+                            return channel
+                
+                # Priority 3: First available channel with send permissions
+                for channel in guild.text_channels:
+                    if channel.permissions_for(guild.me).send_messages:
+                        return channel
+        
+        return None
     
     # ==================== USER MEMORY METHODS ====================
     
@@ -1329,9 +1464,10 @@ class UnifiedMemorySystem:
     def get_daily_mood(self) -> dict:
         """Get Izumi's current mood based on interactions, time, and randomness"""
         import random
-        from datetime import datetime
+        from datetime import datetime, timezone
         
-        current_time = datetime.now()
+        # Use UTC time for consistency across timezones
+        current_time = datetime.now(timezone.utc)
         hour = current_time.hour
         
         # Get recent interaction data
@@ -1418,36 +1554,37 @@ class UnifiedMemorySystem:
     
     def get_time_personality(self) -> dict:
         """Get time-aware personality adjustments"""
-        from datetime import datetime
-        hour = datetime.now().hour
+        from datetime import datetime, timezone
+        # Use UTC time for consistency
+        hour = datetime.now(timezone.utc).hour
         
         if 6 <= hour <= 10:    # Morning
             return {
                 "energy": "high",
                 "style": "cheerful and bright",
                 "greeting_style": ["morning!", "good morning!", "hey there!", "rise and shine!"],
-                "personality_note": "naturally energetic and optimistic in the morning"
+                "personality_note": "naturally energetic and optimistic (it's morning in UTC)"
             }
         elif 11 <= hour <= 17: # Afternoon  
             return {
                 "energy": "medium-high",
                 "style": "casual and friendly",
                 "greeting_style": ["hey!", "hey there!", "sup!", "hi!"],
-                "personality_note": "relaxed and sociable during the day"
+                "personality_note": "relaxed and sociable (afternoon UTC time)"
             }
         elif 18 <= hour <= 22: # Evening
             return {
                 "energy": "medium",
                 "style": "cozy and warm",
                 "greeting_style": ["good evening~", "evening!", "hey~", "hi there~"],
-                "personality_note": "more relaxed and cozy in the evening"
+                "personality_note": "more relaxed and cozy (evening UTC time)"
             }
         else:                  # Late night
             return {
                 "energy": "low",
                 "style": "quiet and sleepy",
                 "greeting_style": ["*yawn* hey...", "oh hi...", "hey there... *tired*", "sup... kinda tired"],
-                "personality_note": "sleepy and more subdued at night"
+                "personality_note": "sleepy and more subdued (late night UTC)"
             }
     
     def _get_time_context(self, hour: int) -> str:
@@ -1732,3 +1869,116 @@ class UnifiedMemorySystem:
                 result["quirk_content"] = random.choice(quirks["favorite_phrases"])
         
         return result
+
+    # --- PROACTIVE MESSAGE DELIVERY ---
+    
+    async def send_unprompted_message(self, bot, guild_id=None, channel_id=None):
+        """Send proactive/unprompted messages to users"""
+        try:
+            # Find an appropriate channel to send to
+            target_channel = None
+            
+            if channel_id:
+                target_channel = bot.get_channel(channel_id)
+            elif guild_id:
+                guild = bot.get_guild(guild_id)
+                if guild:
+                    # Find a general chat channel
+                    for channel in guild.text_channels:
+                        if channel.name in ['general', 'chat', 'main', 'lounge']:
+                            target_channel = channel
+                            break
+                    if not target_channel:
+                        target_channel = guild.text_channels[0] if guild.text_channels else None
+            else:
+                # Find any available channel from recent activity
+                if hasattr(self, 'recent_messages') and self.recent_messages:
+                    recent_channel_id = list(self.recent_messages.keys())[0]
+                    target_channel = bot.get_channel(int(recent_channel_id))
+            
+            if not target_channel:
+                return None
+                
+            # Check if we should send an unprompted message
+            should_send, message_type = self._should_send_unprompted_message(target_channel.id)
+            if not should_send:
+                return None
+                
+            # Generate the appropriate message
+            message_content = None
+            if message_type == "emotional_followup":
+                # Get users we have emotional followups for
+                for user_id in self.memory_data.get('users', {}):
+                    followups = self.get_emotional_followups(int(user_id))
+                    if followups:
+                        user = bot.get_user(int(user_id))
+                        if user:
+                            message_content = f"*thinking about earlier* {followups[0]}"
+                            break
+                            
+            elif message_type == "server_event":
+                events = self.check_server_events(target_channel.guild.id if target_channel.guild else 0)
+                if events:
+                    message_content = f"*notices* {events[0]} 🎉"
+                    
+            elif message_type == "curiosity":
+                # Generate a general curiosity question
+                questions = self.generate_curiosity_questions("", 0)  # General context
+                if questions:
+                    message_content = f"*wonders* {questions[0]}"
+                    
+            elif message_type == "mood_share":
+                mood_data = self.get_daily_mood()
+                if mood_data['energy'] >= 7:
+                    message_content = f"*{mood_data['mood_description']}* {mood_data['time_context']} ✨"
+                    
+            if message_content:
+                await target_channel.send(message_content)
+                self._log_unprompted_message(target_channel.id, message_type)
+                return message_content
+                
+        except Exception as e:
+            print(f"Error sending unprompted message: {e}")
+            
+        return None
+    
+    def _should_send_unprompted_message(self, channel_id):
+        """Determine if and what type of unprompted message to send"""
+        from datetime import datetime, timezone
+        now = datetime.now(timezone.utc)
+        
+        # Check last unprompted message time to avoid spam
+        last_unprompted = self.memory_data.get('last_unprompted', {}).get(str(channel_id), 0)
+        if last_unprompted and (now.timestamp() - last_unprompted) < 3600:  # 1 hour cooldown
+            return False, None
+            
+        # Check if there are emotional followups pending
+        for user_id in self.memory_data.get('users', {}):
+            if self.get_emotional_followups(int(user_id)):
+                return True, "emotional_followup"
+        
+        # Check for server events
+        if self.check_server_events(0):  # General check
+            return True, "server_event"
+            
+        # Random curiosity (low chance)
+        import random
+        if random.random() < 0.1:  # 10% chance
+            return True, "curiosity"
+            
+        # Mood sharing if very energetic
+        mood_data = self.get_daily_mood()
+        if mood_data['energy'] >= 8 and random.random() < 0.2:  # 20% chance when very energetic
+            return True, "mood_share"
+            
+        return False, None
+    
+    def _log_unprompted_message(self, channel_id, message_type):
+        """Log that we sent an unprompted message"""
+        from datetime import datetime, timezone
+        
+        if 'last_unprompted' not in self.memory_data:
+            self.memory_data['last_unprompted'] = {}
+            
+        self.memory_data['last_unprompted'][str(channel_id)] = datetime.now(timezone.utc).timestamp()
+        self.save_memory()

@@ -691,6 +691,11 @@ class OsuGachaStoreCog(commands.Cog, name="Osu Gacha Store"):
         self.store_monitor_task = None
         self.store_announcement_message = None  # NEW: Track the announcement message
         
+        # Initialize current store period on startup to prevent missed refreshes
+        current_time = int(time.time())
+        refresh_interval = STORE_CONFIG["refresh_interval_minutes"] * 60
+        self.last_store_period = current_time // refresh_interval
+        
         # Start store monitoring if enabled
         if STORE_ANNOUNCEMENT_CONFIG.get("enabled", False):
             self.store_monitor_task = self.bot.loop.create_task(self.monitor_store_refresh())
@@ -787,6 +792,7 @@ class OsuGachaStoreCog(commands.Cog, name="Osu Gacha Store"):
     async def monitor_store_refresh(self):
         """Monitor for store refreshes and send announcements"""
         await self.bot.wait_until_ready()
+        print(f"🏪 Store monitor started - Current period: {self.last_store_period}")
         
         while not self.bot.is_closed():
             try:
@@ -796,6 +802,7 @@ class OsuGachaStoreCog(commands.Cog, name="Osu Gacha Store"):
                 
                 # Check if store has refreshed
                 if self.last_store_period is not None and current_period != self.last_store_period:
+                    print(f"🔄 Store refresh detected: Period {self.last_store_period} → {current_period}")
                     await self.send_store_announcement(store_data)
                 
                 self.last_store_period = current_period

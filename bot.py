@@ -56,6 +56,7 @@ import aiohttp
 import time
 import signal
 import sys
+import asyncio
 from datetime import datetime, timezone
 from dotenv import load_dotenv
 from utils.helpers import *
@@ -240,6 +241,8 @@ class MinimalBot(commands.Bot):
         # start background tasks
         self.save_data_task.start()
         self.check_birthday_task.start()
+        self.proactive_message_task.start()
+        self.birthday_ping_task.start()
         
         # load data if not already loaded
         self.load_required_data()
@@ -294,43 +297,104 @@ class MinimalBot(commands.Bot):
 
     @tasks.loop(hours=6)
     async def check_birthday_task(self):
-        """background task to check for birthdays"""
+        """background task to check for birthdays and send random pings"""
+        from datetime import datetime, timezone
         current_date = datetime.now(timezone.utc).strftime('%m-%d')
         
-        if self.last_birthday_check == current_date:
-            return
-        
-        self.last_birthday_check = current_date
-        
-        for guild in self.guilds:
-            guild_id_str = str(guild.id)
-            birthday_config = self.birthday_notifications.get(guild_id_str)
+        # Regular birthday check (once per day)
+        if self.last_birthday_check != current_date:
+            self.last_birthday_check = current_date
             
-            if not birthday_config:
-                continue
-            
-            # handle both old format (channel_id) and new format (dict with channel_id)    
-            if isinstance(birthday_config, dict):
-                birthday_channel_id = birthday_config.get('channel_id')
-            else:
-                birthday_channel_id = birthday_config
+            for guild in self.guilds:
+                guild_id_str = str(guild.id)
+                birthday_config = self.birthday_notifications.get(guild_id_str)
                 
-            if not birthday_channel_id:
-                continue
+                if not birthday_config:
+                    continue
                 
-            birthday_channel = guild.get_channel(int(birthday_channel_id))
-            if not birthday_channel:
-                continue
-            
-            guild_birthdays = self.birthdays.get(guild_id_str, {})
-            for user_id_str, birthday_date in guild_birthdays.items():
-                if birthday_date == current_date:
-                    try:
-                        user = guild.get_member(int(user_id_str))
-                        if user:
-                            await birthday_channel.send(f"🎉 happy birthday {user.mention}! 🎂")
-                    except Exception as e:
-                        print(f"error sending birthday message: {e}")
+                # handle both old format (channel_id) and new format (dict with channel_id)    
+                if isinstance(birthday_config, dict):
+                    birthday_channel_id = birthday_config.get('channel_id')
+                else:
+                    birthday_channel_id = birthday_config
+                    
+                if not birthday_channel_id:
+                    continue
+                    
+                birthday_channel = guild.get_channel(int(birthday_channel_id))
+                if not birthday_channel:
+                    continue
+                
+                guild_birthdays = self.birthdays.get(guild_id_str, {})
+                for user_id_str, birthday_date in guild_birthdays.items():
+                    if birthday_date == current_date:
+                        try:
+                            user = guild.get_member(int(user_id_str))
+                            if user:
+                                await birthday_channel.send(f"🎉 happy birthday {user.mention}! 🎂")
+                        except Exception as e:
+                            print(f"error sending birthday message: {e}")
+        
+        # Random birthday pings throughout the day (every 6 hours during birthday)
+        try:
+            unified_memory = self.get_cog('UnifiedMemory')
+            if unified_memory:
+                result = await unified_memory.send_random_birthday_ping(self)
+                if result:
+                    print(f"🎂 {result}")
+        except Exception as e:
+            print(f"Error sending random birthday ping: {e}")
+
+    @tasks.loop(hours=2)  # Check every 2 hours for proactive opportunities
+    async def proactive_message_task(self):
+        """Background task to send proactive/unprompted messages"""
+        try:
+            unified_memory = self.get_cog('UnifiedMemory')
+            if not unified_memory:
+                return
+                
+            # Try to send a proactive message to one of the active guilds
+            for guild in self.guilds:
+                result = await unified_memory.send_unprompted_message(self, guild_id=guild.id)
+                if result:
+                    print(f"📤 Sent proactive message: {result[:50]}...")
+                    break  # Only send one message per cycle
+                    
+        except Exception as e:
+            print(f"❌ Error in proactive message task: {e}")
+
+    @proactive_message_task.before_loop
+    async def before_proactive_message_task(self):
+        """Wait for bot to be ready before starting proactive messages"""
+        await self.wait_until_ready()
+        # Wait an additional hour after startup before starting proactive messages
+        await asyncio.sleep(3600)
+
+    @tasks.loop(hours=3)  # Check every 3 hours for birthday pings
+    async def birthday_ping_task(self):
+        """Send random birthday pings during the preferred 16-hour window"""
+        from datetime import datetime, timezone
+        utc_now = datetime.now(timezone.utc)
+        current_hour = utc_now.hour
+        
+        # Preferred window: 8 AM to 11:59 PM UTC (16 hours)
+        # This covers most active hours globally
+        if 8 <= current_hour <= 23:
+            try:
+                unified_memory = self.get_cog('UnifiedMemory')
+                if unified_memory:
+                    result = await unified_memory.send_random_birthday_ping(self)
+                    if result:
+                        print(f"🎂 Birthday ping: {result}")
+            except Exception as e:
+                print(f"Error in birthday ping task: {e}")
+
+    @birthday_ping_task.before_loop
+    async def before_birthday_ping_task(self):
+        """Wait for bot to be ready before starting birthday pings"""
+        await self.wait_until_ready()
+        # Wait 30 minutes after startup
+        await asyncio.sleep(1800)
 
     async def on_command_error(self, ctx: commands.Context, error: commands.CommandError):
         if isinstance(error, commands.CommandNotFound):

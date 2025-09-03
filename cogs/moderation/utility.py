@@ -586,5 +586,41 @@ class UtilityCog(commands.Cog, name="Utility"):
         # Schedule restart without blocking
         asyncio.create_task(delayed_restart())
 
+    @commands.command(name='proactive', aliases=['unprompted', 'izumi_talk'])
+    @commands.has_permissions(administrator=True)
+    async def trigger_proactive_message(self, ctx):
+        """Manually trigger a proactive message from Izumi (admin only)"""
+        unified_memory = self.bot.get_cog('UnifiedMemory')
+        if not unified_memory:
+            await ctx.send("❌ Unified memory system not available")
+            return
+            
+        try:
+            result = await unified_memory.send_unprompted_message(self.bot, channel_id=ctx.channel.id)
+            if result:
+                await ctx.send(f"✅ Triggered proactive message!", delete_after=5)
+            else:
+                await ctx.send("ℹ️ No proactive message was appropriate right now", delete_after=5)
+        except Exception as e:
+            await ctx.send(f"❌ Error: {e}")
+
+    @commands.command(name='birthday_ping', aliases=['testbirthdayping', 'bdping'])
+    @commands.has_permissions(administrator=True)
+    async def test_birthday_ping(self, ctx):
+        """Manually test the birthday ping system (admin only)"""
+        unified_memory = self.bot.get_cog('UnifiedMemory')
+        if not unified_memory:
+            await ctx.send("❌ Unified memory system not available")
+            return
+            
+        try:
+            result = await unified_memory.send_random_birthday_ping(self.bot)
+            if result:
+                await ctx.send(f"✅ Birthday ping sent: {result}", delete_after=10)
+            else:
+                await ctx.send("ℹ️ No birthday users found or cooldown active", delete_after=10)
+        except Exception as e:
+            await ctx.send(f"❌ Error: {e}")
+
 async def setup(bot):
     await bot.add_cog(UtilityCog(bot))

@@ -254,21 +254,24 @@ class ContextBuilder:
     
     def _get_personality_context(self, user_id: int, current_message: str) -> str:
         """Get Izumi's current mood, personality state, and behavioral context"""
+        from datetime import datetime, timezone
+        utc_time = datetime.now(timezone.utc)
+        
         context_parts = []
         
         # Get current mood and energy
         mood_data = self.unified_memory.get_daily_mood()
         time_personality = self.unified_memory.get_time_personality()
         
-        # Add mood context
+        # Add UTC time awareness and mood context
         mood_desc = mood_data.get('mood_description', 'feeling neutral')
         time_context = mood_data.get('time_context', '')
-        context_parts.append(f"Currently {mood_desc} with {time_context}")
+        context_parts.append(f"Currently {mood_desc} with {time_context} (UTC: {utc_time.strftime('%H:%M')})")
         
-        # Add time-based personality
+        # Add time-based personality with timezone note
         personality_note = time_personality.get('personality_note', '')
         if personality_note:
-            context_parts.append(f"Time personality: {personality_note}")
+            context_parts.append(f"Time personality: {personality_note} - remember your time may differ from users")
         
         # Check for memory recall opportunities
         recall_opportunities = self.unified_memory.get_memory_recall_opportunities(user_id, current_message)
