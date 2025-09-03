@@ -501,12 +501,6 @@ class UnifiedMemorySystem:
         utc_now = datetime.now(timezone.utc)
         current_date = utc_now.strftime('%m-%d')
         
-        # Check if we've sent a ping in the last 2 hours to avoid spam
-        last_ping_key = f'last_birthday_ping_{current_date}'
-        last_ping = self.memory_data.get(last_ping_key, 0)
-        if last_ping and (utc_now.timestamp() - last_ping) < 7200:  # 2 hours cooldown
-            return None
-        
         birthday_users = []
         
         # Check bot's birthday data (primary source)
@@ -542,9 +536,26 @@ class UnifiedMemorySystem:
         
         if not birthday_users:
             return None
+        
+        # Filter out users who already got a ping recently (per-user cooldown)
+        eligible_users = []
+        for user in birthday_users:
+            user_ping_key = f'last_birthday_ping_{user["user_id"]}_{current_date}'
+            last_ping = self.memory_data.get(user_ping_key, 0)
             
-        # Pick a random birthday user
-        chosen_user = random.choice(birthday_users)
+            # Each user can get a ping every 4-6 hours (random interval)
+            min_cooldown = 4 * 3600  # 4 hours
+            max_cooldown = 6 * 3600  # 6 hours
+            user_cooldown = random.randint(min_cooldown, max_cooldown)
+            
+            if not last_ping or (utc_now.timestamp() - last_ping) >= user_cooldown:
+                eligible_users.append(user)
+        
+        if not eligible_users:
+            return None
+            
+        # Pick a random eligible user
+        chosen_user = random.choice(eligible_users)
         chosen_user_id = int(chosen_user['user_id'])
         
         # Find an appropriate channel (preferably where they're active)
@@ -582,8 +593,9 @@ class UnifiedMemorySystem:
             message = random.choice(birthday_messages)
             await target_channel.send(message)
             
-            # Log the ping time
-            self.memory_data[last_ping_key] = utc_now.timestamp()
+            # Log the ping time for this specific user
+            user_ping_key = f'last_birthday_ping_{chosen_user["user_id"]}_{current_date}'
+            self.memory_data[user_ping_key] = utc_now.timestamp()
             self.pending_saves = True
             
             age_info = f" (age {age})" if chosen_user['year'] else ""

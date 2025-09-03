@@ -336,6 +336,7 @@ class MinimalBot(commands.Bot):
                             print(f"error sending birthday message: {e}")
         
         # Random birthday pings throughout the day (every 6 hours during birthday)
+        # Each person gets their own cooldown (4-6 hours between pings per person)
         try:
             unified_memory = self.get_cog('UnifiedMemory')
             if unified_memory:
