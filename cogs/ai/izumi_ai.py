@@ -172,7 +172,70 @@ class IzumiAI(commands.Cog):
             print(f"🎭 Continuing conversation in #{message.channel.name} - 'izumi' mentioned within 60s window")
             return True
         
+        # Additional smart continuation triggers
+        return await self._check_smart_continuation_triggers(message, tracker, time_since_last)
+
+    async def _check_smart_continuation_triggers(self, message: discord.Message, tracker: dict, time_since_last: float) -> bool:
+        """Check for intelligent conversation continuation triggers"""
+        message_lower = message.content.lower()
+        
+        # 1. Direct questions to the group (30% chance within 30 seconds)
+        question_words = ["what do you", "what does everyone", "anyone know", "does anyone", "what should", "which", "who thinks", "thoughts?", "opinions?"]
+        if any(word in message_lower for word in question_words) and time_since_last <= 30:
+            if self._random_chance(30):  # 30% chance
+                print(f"🎭 Continuing conversation in #{message.channel.name} - question detected, 30% trigger")
+                return True
+        
+        # 2. Controversial/opinion topics (20% chance within 45 seconds)
+        opinion_triggers = ["i think", "i believe", "in my opinion", "personally", "i disagree", "i agree", "hot take", "unpopular opinion", "change my mind"]
+        if any(trigger in message_lower for trigger in opinion_triggers) and time_since_last <= 45:
+            if self._random_chance(20):  # 20% chance
+                print(f"🎭 Continuing conversation in #{message.channel.name} - opinion topic detected, 20% trigger")
+                return True
+        
+        # 3. When someone asks for help/advice (40% chance within 40 seconds)
+        help_triggers = ["help", "how do i", "can someone", "need advice", "what's the best", "recommendations", "suggestions"]
+        if any(trigger in message_lower for trigger in help_triggers) and time_since_last <= 40:
+            if self._random_chance(40):  # 40% chance
+                print(f"🎭 Continuing conversation in #{message.channel.name} - help request detected, 40% trigger")
+                return True
+        
+        # 4. Emotional content (25% chance within 35 seconds)
+        emotional_triggers = ["excited", "sad", "angry", "frustrated", "happy", "worried", "stressed", "amazing", "terrible", "love", "hate"]
+        if any(trigger in message_lower for trigger in emotional_triggers) and time_since_last <= 35:
+            if self._random_chance(25):  # 25% chance
+                print(f"🎭 Continuing conversation in #{message.channel.name} - emotional content detected, 25% trigger")
+                return True
+        
+        # 5. Follow-up to Izumi's last message (50% chance within 20 seconds)
+        # This triggers when someone responds shortly after Izumi's message
+        if time_since_last <= 20:
+            # Check if this might be a response to Izumi
+            response_indicators = ["yeah", "true", "exactly", "i agree", "disagree", "but", "however", "also", "plus", "additionally"]
+            if any(indicator in message_lower for indicator in response_indicators):
+                if self._random_chance(50):  # 50% chance
+                    print(f"🎭 Continuing conversation in #{message.channel.name} - follow-up response detected, 50% trigger")
+                    return True
+        
+        # 6. Gaming/tech topics that Izumi might be interested in (15% chance within 50 seconds)
+        interest_triggers = ["osu", "anime", "gaming", "code", "programming", "discord", "bot", "ai", "technology", "computer"]
+        if any(trigger in message_lower for trigger in interest_triggers) and time_since_last <= 50:
+            if self._random_chance(15):  # 15% chance
+                print(f"🎭 Continuing conversation in #{message.channel.name} - interest topic detected, 15% trigger")
+                return True
+        
+        # 7. Conversation lull - proactively continue (10% chance if 15-25 seconds of silence)
+        if 15 <= time_since_last <= 25:
+            if self._random_chance(10):  # 10% chance to revive conversation
+                print(f"🎭 Continuing conversation in #{message.channel.name} - conversation lull detected, 10% trigger")
+                return True
+        
         return False
+
+    def _random_chance(self, percentage: int) -> bool:
+        """Return True based on percentage chance"""
+        import random
+        return random.randint(1, 100) <= percentage
 
     async def _continue_conversation(self, message: discord.Message):
         """Continue participating in an ongoing conversation"""
@@ -188,8 +251,9 @@ class IzumiAI(commands.Cog):
                 channel_id=message.channel.id
             )
             
-            # Add specific instruction for continuing conversation
-            conversation_prompt = f"{context}\n\nUser message: {message.content}\n\nInstruction: Continue participating in this ongoing conversation naturally. Someone mentioned your name, so respond appropriately to the context."
+            # Determine the type of continuation and create appropriate prompt
+            continuation_type = self._get_continuation_type(message)
+            conversation_prompt = self._build_continuation_prompt(context, message, continuation_type)
             
             # Generate response
             response_text = await self._generate_response_with_fallback(
@@ -209,6 +273,73 @@ class IzumiAI(commands.Cog):
             
         except Exception as e:
             print(f"❌ Error continuing conversation: {e}")
+
+    def _get_continuation_type(self, message: discord.Message) -> str:
+        """Determine what type of continuation this is"""
+        message_lower = message.content.lower()
+        
+        if "izumi" in message_lower:
+            return "name_mention"
+        
+        question_words = ["what do you", "what does everyone", "anyone know", "does anyone", "what should", "which", "who thinks", "thoughts?", "opinions?"]
+        if any(word in message_lower for word in question_words):
+            return "question"
+        
+        opinion_triggers = ["i think", "i believe", "in my opinion", "personally", "i disagree", "i agree", "hot take", "unpopular opinion"]
+        if any(trigger in message_lower for trigger in opinion_triggers):
+            return "opinion"
+        
+        help_triggers = ["help", "how do i", "can someone", "need advice", "what's the best", "recommendations", "suggestions"]
+        if any(trigger in message_lower for trigger in help_triggers):
+            return "help_request"
+        
+        emotional_triggers = ["excited", "sad", "angry", "frustrated", "happy", "worried", "stressed", "amazing", "terrible", "love", "hate"]
+        if any(trigger in message_lower for trigger in emotional_triggers):
+            return "emotional"
+        
+        response_indicators = ["yeah", "true", "exactly", "i agree", "disagree", "but", "however", "also", "plus", "additionally"]
+        if any(indicator in message_lower for indicator in response_indicators):
+            return "follow_up"
+        
+        interest_triggers = ["osu", "anime", "gaming", "code", "programming", "discord", "bot", "ai", "technology", "computer"]
+        if any(trigger in message_lower for trigger in interest_triggers):
+            return "interest_topic"
+        
+        # Check if this is a conversation lull (based on timing rather than content)
+        channel_id = message.channel.id
+        if channel_id in self.participation_tracker:
+            time_since_last = time.time() - self.participation_tracker[channel_id].get("last_participation", 0)
+            if 15 <= time_since_last <= 25:
+                return "conversation_lull"
+        
+        return "general"
+
+    def _build_continuation_prompt(self, context: str, message: discord.Message, continuation_type: str) -> str:
+        """Build an appropriate prompt based on continuation type"""
+        base_prompt = f"{context}\n\nUser message: {message.content}\n\n"
+        
+        instructions = {
+            "name_mention": "Someone mentioned your name in the conversation. Respond naturally and appropriately to what they said.",
+            
+            "question": "Someone asked a question to the group. You can chime in with your thoughts or knowledge if you have something valuable to add. Keep it conversational and helpful.",
+            
+            "opinion": "Someone shared their opinion or belief. You can agree, disagree, or add your own perspective. Be respectful but feel free to have your own thoughts.",
+            
+            "help_request": "Someone is asking for help or advice. If you have useful knowledge or suggestions, share them in a helpful and supportive way.",
+            
+            "emotional": "Someone expressed emotions or feelings. Respond with appropriate empathy and support, or share in their excitement if it's positive.",
+            
+            "follow_up": "Someone seems to be responding or following up on the conversation. Continue the natural flow of discussion.",
+            
+            "interest_topic": "Someone mentioned a topic you might be interested in (gaming, tech, anime, etc.). Feel free to join in with your own thoughts or experiences.",
+            
+            "conversation_lull": "The conversation seems to be slowing down. You can ask a related question, make an observation, or share a thought to keep the discussion going naturally.",
+            
+            "general": "Continue participating in this ongoing conversation naturally."
+        }
+        
+        instruction = instructions.get(continuation_type, instructions["general"])
+        return f"{base_prompt}Instruction: {instruction}"
     
     async def _handle_ai_response(self, message: discord.Message):
         """Generate and send AI response"""
