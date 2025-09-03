@@ -13,7 +13,7 @@ import asyncio
 from typing import Dict, Optional
 
 from .learning_engine import LearningEngine
-from .context_builder import ContextBuilder
+from .context_builder_fixed import ContextBuilder
 from utils.helpers import save_json, load_json
 
 class IzumiAI(commands.Cog):
@@ -98,6 +98,14 @@ class IzumiAI(commands.Cog):
     async def _handle_ai_response(self, message: discord.Message):
         """Generate and send AI response"""
         if not self.gemini_model:
+            return
+        
+        # Check for emotional responses first (for users returning after absence)
+        emotional_context = self.learning_engine.get_emotional_context(message.author.id, message.guild.id)
+        
+        # For strong emotional situations, use pre-generated response
+        if emotional_context["type"] in ["completely_absent", "being_ignored"] and emotional_context.get("message"):
+            await message.reply(emotional_context["message"])
             return
         
         # START TYPING INDICATOR - Shows "Izumi is typing..." in Discord

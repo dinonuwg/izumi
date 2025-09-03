@@ -782,6 +782,53 @@ class MemoryManagement(commands.Cog):
         except Exception as e:
             await ctx.send(f"❌ Error during trust decay: {e}")
     
+    @memory.command(name='emotion_test')
+    @commands.has_permissions(administrator=True)
+    async def test_emotional_context(self, ctx, user: discord.Member = None):
+        """Test emotional context system for a user (Admin only)"""
+        target_user = user if user else ctx.author
+        
+        try:
+            emotional_context = self.bot.unified_memory.get_emotional_context(target_user.id, ctx.guild.id)
+            
+            embed = discord.Embed(
+                title=f"🧠 Emotional Context for {target_user.display_name}",
+                color=0xFF69B4
+            )
+            
+            embed.add_field(
+                name="Context Type",
+                value=emotional_context["type"],
+                inline=False
+            )
+            
+            if emotional_context.get("message"):
+                embed.add_field(
+                    name="Emotional Response",
+                    value=emotional_context["message"],
+                    inline=False
+                )
+            
+            if emotional_context.get("days_absent"):
+                embed.add_field(
+                    name="Days Absent",
+                    value=f"{emotional_context['days_absent']} days",
+                    inline=True
+                )
+            
+            if emotional_context.get("days_ignored"):
+                embed.add_field(
+                    name="Days Ignored",
+                    value=f"{emotional_context['days_ignored']} days", 
+                    inline=True
+                )
+            
+            await ctx.send(embed=embed)
+            
+        except Exception as e:
+            await ctx.send(f"❌ Error testing emotional context: {e}")
+    
+    
     @commands.command(name='export_self_memories')
     @commands.has_permissions(administrator=True)
     async def export_self_memories(self, ctx):

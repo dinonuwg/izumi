@@ -290,6 +290,77 @@ class UnifiedMemorySystem:
             self.pending_saves = True
             print(f"Decayed trust levels for {decay_count} inactive users")
     
+    def get_emotional_context(self, user_id: int, guild_id: int) -> dict:
+        """Analyze user interaction patterns to generate emotional context for responses"""
+        import time
+        
+        user_id_str = str(user_id)
+        guild_id_str = str(guild_id)
+        
+        # Get Izumi's memory of last interaction
+        if user_id_str not in self.memory_data['users']:
+            return {"type": "new_user", "message": ""}
+        
+        user_data = self.memory_data['users'][user_id_str]
+        last_izumi_interaction = user_data['activity']['last_interaction']
+        current_time = int(time.time())
+        
+        # Get server activity from XP data
+        xp_data = self.bot.xp_data
+        guild_xp_data = xp_data.get(guild_id_str, {})
+        user_xp_data = guild_xp_data.get(user_id_str, {})
+        last_server_activity = user_xp_data.get('last_message_timestamp', 0)
+        
+        # Calculate time differences (in days)
+        days_since_izumi = (current_time - last_izumi_interaction) / 86400 if last_izumi_interaction > 0 else 999
+        days_since_server = (current_time - last_server_activity) / 86400 if last_server_activity > 0 else 999
+        
+        # Determine interaction pattern and emotional response
+        if days_since_izumi > 30 and days_since_server > 30:
+            # Both inactive - user completely gone
+            return {
+                "type": "completely_absent",
+                "message": f"*eyes light up with excitement* {user_data['basic_info'].get('display_name', 'You')}!! You're back! I missed you so much... where have you been? It's been over a month! 🥺💕",
+                "days_absent": int(min(days_since_izumi, days_since_server))
+            }
+        
+        elif days_since_izumi > 14 and days_since_server < 3:
+            # Active in server but ignoring Izumi
+            return {
+                "type": "being_ignored", 
+                "message": f"Hmph! {user_data['basic_info'].get('display_name', 'You')}... I can see you chatting with others but you never talk to me anymore! 😤 It's been {int(days_since_izumi)} days... do you not like me? 🥺",
+                "days_ignored": int(days_since_izumi)
+            }
+        
+        elif days_since_izumi > 7 and days_since_server > 7:
+            # Both somewhat inactive
+            return {
+                "type": "worried",
+                "message": f"Oh! {user_data['basic_info'].get('display_name', 'You')}! I was getting worried about you... I haven't seen you around much lately. Are you okay? 😟💙",
+                "days_absent": int(max(days_since_izumi, days_since_server))
+            }
+        
+        elif days_since_izumi > 3 and days_since_server < 1:
+            # Recently active but not talking to Izumi
+            return {
+                "type": "pouty",
+                "message": f"{user_data['basic_info'].get('display_name', 'You')}! I saw you were here yesterday but you didn't say hi to me... 😞 Don't forget about me! 💔",
+                "days_ignored": int(days_since_izumi)
+            }
+        
+        elif days_since_izumi > 1 and days_since_izumi <= 3:
+            # Short absence
+            return {
+                "type": "happy_return",
+                "message": f"*perks up* Oh hi {user_data['basic_info'].get('display_name', 'You')}! Good to see you again~ 😊✨",
+                "days_absent": int(days_since_izumi)
+            }
+        
+        else:
+            # Regular interaction
+            return {"type": "normal", "message": ""}
+    
+    
     
     
     def save_unified_data(self, data: Dict = None):
