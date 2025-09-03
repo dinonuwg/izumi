@@ -61,11 +61,24 @@ class MemoryManagement(commands.Cog):
         if user is None:
             user = ctx.author
         
-        if not self.bot.izumi_memories:
-            await ctx.send("No memories stored yet!")
-            return
-        
         memories = self.bot.get_user_memories(user.id)
+        
+        # Check if user has any memories stored
+        has_memories = any([
+            memories.get("name"),
+            memories.get("nickname"), 
+            memories.get("age"),
+            memories.get("birthday"),
+            memories.get("interests"),
+            memories.get("personality"),
+            memories.get("notes"),
+            memories.get("achievements"),
+            memories.get("last_seen")
+        ])
+        
+        if not has_memories:
+            await ctx.send(f"No memories stored about {user.display_name} yet!")
+            return
         
         embed = discord.Embed(
             title=f"🧠 Izumi's memories about {user.display_name}",
@@ -313,13 +326,18 @@ class MemoryManagement(commands.Cog):
     async def clear_memory(self, ctx, user: discord.Member):
         """Clear all memories about a user"""
         user_id_str = str(user.id)
-        if user_id_str in self.bot.izumi_memories:
-            del self.bot.izumi_memories[user_id_str]
-            self.bot.pending_saves = True
-            await self.bot.save_immediately()  # Force immediate save for real-time updates
-            await ctx.send(f"✅ Cleared all memories about {user.display_name}")
-        else:
-            await ctx.send(f"No memories found for {user.display_name}")
+        try:
+            # Check if user has memories in unified system
+            if user_id_str in self.bot.unified_memory.memory_data.get('users', {}):
+                # Clear user data from unified memory
+                del self.bot.unified_memory.memory_data['users'][user_id_str]
+                self.bot.unified_memory.pending_saves = True
+                await self.bot.unified_memory.save_data()
+                await ctx.send(f"✅ Cleared all memories about {user.display_name}")
+            else:
+                await ctx.send(f"No memories found for {user.display_name}")
+        except Exception as e:
+            await ctx.send(f"Error clearing memories: {e}")
 
     @memory.command(name='forget')
     async def forget_conversation(self, ctx, user: discord.Member = None):
@@ -343,7 +361,19 @@ class MemoryManagement(commands.Cog):
     @memory.command(name='stats')
     async def memory_stats(self, ctx):
         """Show memory system statistics"""
-        total_users = len(self.bot.izumi_memories)
+        # Get user count from unified memory system
+        try:
+            all_users = self.bot.unified_memory.memory_data.get('users', {})
+            total_users = len(all_users)
+            
+            # Calculate trust levels
+            trust_levels = []
+            for user_data in all_users.values():
+                trust_level = user_data.get('social', {}).get('trust_level', 0)
+                trust_levels.append(trust_level)
+        except Exception as e:
+            total_users = 0
+            trust_levels = []
         
         # Get active chats from AI cog
         ai_cog = self.bot.get_cog('IzumiAI')
@@ -356,9 +386,8 @@ class MemoryManagement(commands.Cog):
         embed.add_field(name="Users with memories", value=str(total_users), inline=True)
         embed.add_field(name="Active chat sessions", value=str(active_chats), inline=True)
         
-        if total_users > 0:
+        if total_users > 0 and trust_levels:
             # Calculate trust level distribution
-            trust_levels = [mem.get("trust_level", 0) for mem in self.bot.izumi_memories.values()]
             avg_trust = sum(trust_levels) / len(trust_levels)
             embed.add_field(name="Average trust level", value=f"{avg_trust:.1f}/10", inline=True)
         
@@ -368,12 +397,19 @@ class MemoryManagement(commands.Cog):
     @commands.has_permissions(administrator=True)
     async def export_memories(self, ctx):
         """Export all memories as JSON (admin only)"""
-        if not self.bot.izumi_memories:
-            await ctx.send("No memories to export!")
+        try:
+            # Get all memory data from unified system
+            all_data = self.bot.unified_memory.memory_data
+            
+            if not all_data or not all_data.get('users'):
+                await ctx.send("No memories to export!")
+                return
+            
+            # Create a formatted JSON string
+            json_data = json.dumps(all_data, indent=2, ensure_ascii=False)
+        except Exception as e:
+            await ctx.send(f"Error accessing memory data: {e}")
             return
-        
-        # Create a formatted JSON string
-        json_data = json.dumps(self.bot.izumi_memories, indent=2, ensure_ascii=False)
         
         # Create a file and send it
         file_content = f"# Izumi's Memory Export\n# Generated at {time.strftime('%Y-%m-%d %H:%M:%S')}\n\n{json_data}"
@@ -632,11 +668,24 @@ class MemoryManagement(commands.Cog):
         if user is None:
             user = interaction.user
         
-        if not self.bot.izumi_memories:
-            await interaction.response.send_message("No memories stored yet!", ephemeral=True)
-            return
-        
         memories = self.bot.get_user_memories(user.id)
+        
+        # Check if user has any memories stored
+        has_memories = any([
+            memories.get("name"),
+            memories.get("nickname"), 
+            memories.get("age"),
+            memories.get("birthday"),
+            memories.get("interests"),
+            memories.get("personality"),
+            memories.get("notes"),
+            memories.get("achievements"),
+            memories.get("last_seen")
+        ])
+        
+        if not has_memories:
+            await interaction.response.send_message(f"No memories stored about {user.display_name} yet!", ephemeral=True)
+            return
         
         embed = discord.Embed(
             title=f"🧠 Izumi's memories about {user.display_name}",
@@ -928,13 +977,18 @@ class MemoryManagement(commands.Cog):
             return
             
         user_id_str = str(user.id)
-        if user_id_str in self.bot.izumi_memories:
-            del self.bot.izumi_memories[user_id_str]
-            self.bot.pending_saves = True
-            await self.bot.save_immediately()  # Force immediate save for real-time updates
-            await interaction.response.send_message(f"✅ Cleared all memories about {user.display_name}", ephemeral=True)
-        else:
-            await interaction.response.send_message(f"No memories found for {user.display_name}", ephemeral=True)
+        try:
+            # Check if user has memories in unified system
+            if user_id_str in self.bot.unified_memory.memory_data.get('users', {}):
+                # Clear user data from unified memory
+                del self.bot.unified_memory.memory_data['users'][user_id_str]
+                self.bot.unified_memory.pending_saves = True
+                await self.bot.unified_memory.save_data()
+                await interaction.response.send_message(f"✅ Cleared all memories about {user.display_name}", ephemeral=True)
+            else:
+                await interaction.response.send_message(f"No memories found for {user.display_name}", ephemeral=True)
+        except Exception as e:
+            await interaction.response.send_message(f"Error clearing memories: {e}", ephemeral=True)
 
     @app_commands.command(name="memory_forget", description="Clear conversation history with Izumi")
     async def slash_forget_conversation(self, interaction: discord.Interaction, user: discord.Member = None):
