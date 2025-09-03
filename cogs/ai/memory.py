@@ -16,11 +16,20 @@ class MemoryManagement(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
     
-    def _truncate_field_value(self, value: str, max_length: int = 1000) -> str:
+    def _truncate_field_value(self, value: str, max_length: int = 800) -> str:
         """Truncate field value to fit Discord's embed limits"""
         if len(value) <= max_length:
             return value
         return value[:max_length-3] + "..."
+    
+    def _calculate_embed_size(self, embed: discord.Embed) -> int:
+        """Calculate approximate embed size in characters"""
+        size = len(embed.title or "") + len(embed.description or "")
+        for field in embed.fields:
+            size += len(field.name) + len(field.value)
+        if embed.footer:
+            size += len(embed.footer.text or "")
+        return size
 
     @commands.group(name='memory', invoke_without_command=True)
     async def memory(self, ctx):
@@ -338,7 +347,7 @@ class MemoryManagement(commands.Cog):
                 # Clear user data from unified memory
                 del self.bot.unified_memory.memory_data['users'][user_id_str]
                 self.bot.unified_memory.pending_saves = True
-                await self.bot.unified_memory.save_data()
+                self.bot.unified_memory.save_unified_data()
                 await ctx.send(f"✅ Cleared all memories about {user.display_name}")
             else:
                 await ctx.send(f"No memories found for {user.display_name}")
@@ -650,7 +659,7 @@ class MemoryManagement(commands.Cog):
         if cleaned_count > 0:
             # Save cleaned data
             self.bot.unified_memory.pending_saves = True
-            await self.bot.unified_memory.save_data()
+            self.bot.unified_memory.save_unified_data()
             await ctx.send(f"✅ Cleaned duplicate entries for {cleaned_count} users!")
         else:
             await ctx.send("No duplicates found to clean.")
@@ -1103,7 +1112,7 @@ class MemoryManagement(commands.Cog):
                 # Clear user data from unified memory
                 del self.bot.unified_memory.memory_data['users'][user_id_str]
                 self.bot.unified_memory.pending_saves = True
-                await self.bot.unified_memory.save_data()
+                self.bot.unified_memory.save_unified_data()
                 await interaction.response.send_message(f"✅ Cleared all memories about {user.display_name}", ephemeral=True)
             else:
                 await interaction.response.send_message(f"No memories found for {user.display_name}", ephemeral=True)
