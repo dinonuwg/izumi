@@ -620,32 +620,44 @@ class MemoryManagement(commands.Cog):
         cleaned_count = 0
         for user_id in users_to_clean:
             try:
-                memories = self.bot.get_user_memories(user_id)
+                user_id_str = str(user_id)
+                if user_id_str not in self.bot.unified_memory.memory_data['users']:
+                    continue
+                    
+                user_data = self.bot.unified_memory.memory_data['users'][user_id_str]
                 cleaned = False
                 
-                # Clean list fields
-                for field in ['interests', 'dislikes', 'personality_notes', 'custom_notes', 'important_events']:
-                    if field in memories and isinstance(memories[field], list):
-                        original_length = len(memories[field])
+                # Clean list fields in personality section
+                personality_fields = ['interests', 'dislikes', 'personality_notes']
+                for field in personality_fields:
+                    if field in user_data['personality'] and isinstance(user_data['personality'][field], list):
+                        original_list = user_data['personality'][field]
+                        original_length = len(original_list)
                         # Remove duplicates while preserving order
                         cleaned_list = []
-                        for item in memories[field]:
-                            if item not in cleaned_list:
+                        for item in original_list:
+                            if item and item not in cleaned_list:  # Also skip empty items
                                 cleaned_list.append(item)
                         
                         if len(cleaned_list) != original_length:
-                            # Update the cleaned list
-                            if field == 'interests':
-                                self.bot.unified_memory.memory_data['users'][str(user_id)]['personality']['interests'] = cleaned_list
-                            elif field == 'dislikes':
-                                self.bot.unified_memory.memory_data['users'][str(user_id)]['personality']['dislikes'] = cleaned_list
-                            elif field == 'personality_notes':
-                                self.bot.unified_memory.memory_data['users'][str(user_id)]['personality']['personality_notes'] = cleaned_list
-                            elif field == 'custom_notes':
-                                self.bot.unified_memory.memory_data['users'][str(user_id)]['activity']['custom_notes'] = cleaned_list
-                            elif field == 'important_events':
-                                self.bot.unified_memory.memory_data['users'][str(user_id)]['activity']['important_events'] = cleaned_list
-                            
+                            user_data['personality'][field] = cleaned_list
+                            cleaned = True
+                            print(f"Cleaned {field} for user {user_id}: {original_length} -> {len(cleaned_list)}")
+                
+                # Clean list fields in activity section
+                activity_fields = ['custom_notes', 'important_events']
+                for field in activity_fields:
+                    if field in user_data['activity'] and isinstance(user_data['activity'][field], list):
+                        original_list = user_data['activity'][field]
+                        original_length = len(original_list)
+                        # Remove duplicates while preserving order
+                        cleaned_list = []
+                        for item in original_list:
+                            if item and item not in cleaned_list:  # Also skip empty items
+                                cleaned_list.append(item)
+                        
+                        if len(cleaned_list) != original_length:
+                            user_data['activity'][field] = cleaned_list
                             cleaned = True
                             print(f"Cleaned {field} for user {user_id}: {original_length} -> {len(cleaned_list)}")
                 

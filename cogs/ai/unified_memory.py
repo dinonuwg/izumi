@@ -214,15 +214,15 @@ class UnifiedMemorySystem:
             'age': user_data['basic_info']['age'],
             'birthday': user_data['basic_info']['birthday'],
             'relationship_status': user_data['basic_info']['relationship_status'],
-            'interests': user_data['personality']['interests'].copy(),
-            'dislikes': user_data['personality']['dislikes'].copy(),
-            'personality_notes': user_data['personality']['personality_notes'].copy(),
+            'interests': user_data['personality']['interests'].copy() if isinstance(user_data['personality']['interests'], list) else [],
+            'dislikes': user_data['personality']['dislikes'].copy() if isinstance(user_data['personality']['dislikes'], list) else [],
+            'personality_notes': user_data['personality']['personality_notes'].copy() if isinstance(user_data['personality']['personality_notes'], list) else [],
             'conversation_style': user_data['personality']['conversation_style'],
             'trust_level': user_data['social']['trust_level'],
-            'relationships': user_data['social']['relationships'].copy(),
-            'shared_experiences': user_data['social']['shared_experiences'].copy(),
-            'important_events': user_data['activity']['important_events'].copy(),
-            'custom_notes': user_data['activity']['custom_notes'].copy(),
+            'relationships': user_data['social']['relationships'].copy() if isinstance(user_data['social']['relationships'], dict) else {},
+            'shared_experiences': user_data['social']['shared_experiences'].copy() if isinstance(user_data['social']['shared_experiences'], dict) else {},
+            'important_events': user_data['activity']['important_events'].copy() if isinstance(user_data['activity']['important_events'], list) else [],
+            'custom_notes': user_data['activity']['custom_notes'].copy() if isinstance(user_data['activity']['custom_notes'], list) else [],
             'last_interaction': user_data['activity']['last_interaction'],
         }
     
@@ -359,6 +359,16 @@ class UnifiedMemorySystem:
             basic_info['display_name'] = message.author.display_name
             basic_info['username'] = message.author.name
             self.pending_saves = True
+        
+        # Update last interaction time
+        self.memory_data['users'][user_id_str]['activity']['last_interaction'] = int(timestamp.timestamp())
+        
+        # Update trust level - increment by 1 for each message, max 10
+        current_trust = self.memory_data['users'][user_id_str]['social']['trust_level']
+        if current_trust < 10:
+            self.memory_data['users'][user_id_str]['social']['trust_level'] = min(current_trust + 1, 10)
+        
+        self.pending_saves = True
         
         user_data = self.memory_data['users'][user_id_str]['learning_data']
         
