@@ -246,8 +246,8 @@ GOOGLE_AI_TOKEN=your_google_ai_token_here
 # Optional: Database URL (if using external database)
 # DATABASE_URL=your_database_url_here
 
-# Optional: Debug mode
-# DEBUG=true
+# Optional: Debug mode not implemented yet
+# DEBUG=false
 EOF
         print_warning "Created .env file - YOU MUST EDIT IT WITH YOUR TOKENS!"
         print_warning "Edit $BOT_DIR/.env and add your Discord bot token"

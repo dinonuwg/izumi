@@ -4,8 +4,8 @@
 # Run this on your local machine (using Git Bash, WSL, or Linux/Mac terminal)
 
 # Configuration - Update these values
-SERVER_IP="your-server-ip"          # Replace with your server IP
-SERVER_USER="your-username"         # Replace with your server username  
+SERVER_IP="server-ip"          # Replace with your server IP
+SERVER_USER="user"         # Replace with your server username  
 BOT_NAME="izumi-bot"              # Replace with your bot directory name
 
 echo "📦 Preparing Discord bot for transfer to Ubuntu server..."
