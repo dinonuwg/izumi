@@ -409,31 +409,109 @@ class IzumiAI(commands.Cog):
             await message.reply("sorry, having technical issues rn", mention_author=False)
             
     async def _calculate_typing_delay(self, text: str) -> float:
-        """Calculate human-like typing delay based on 80 WPM (400 characters per minute)"""
+        """Calculate human-like typing delay based on 80 WPM, mood, and time of day"""
         import asyncio
+        import random
         
         if not text:
             return 1.0
         
         # Base calculation: 80 WPM = ~400 characters per minute = ~6.67 characters per second
-        chars_per_second = 6.67
-        base_delay = len(text) / chars_per_second
+        base_chars_per_second = 6.67
         
-        # Add some human variance (±20%)
-        import random
-        variance = random.uniform(0.8, 1.2)
+        # Get Izumi's current mood and time personality from unified memory
+        try:
+            unified_memory = self.bot.unified_memory
+            mood_data = unified_memory.get_daily_mood()
+            time_personality = unified_memory.get_time_personality()
+        except Exception:
+            # Fallback to basic calculation if mood system unavailable
+            base_delay = len(text) / base_chars_per_second
+            variance = random.uniform(0.8, 1.2)
+            return max(1.0, min(8.0, base_delay * variance))
         
-        # Minimum 1 second, maximum 8 seconds for user experience
-        delay = max(1.0, min(8.0, base_delay * variance))
+        # Mood affects typing speed multiplier
+        mood_multipliers = {
+            "energetic": 0.75,    # 25% faster - quick energetic typing
+            "excited": 0.70,      # 30% faster - very quick when excited
+            "playful": 0.85,      # 15% faster - still quick but thoughtful
+            "thoughtful": 1.25,   # 25% slower - pauses to think
+            "sleepy": 1.50        # 50% slower - tired and sluggish
+        }
+        
+        mood_multiplier = mood_multipliers.get(mood_data['current_mood'], 1.0)
+        
+        # Time of day affects typing speed
+        time_multipliers = {
+            "high": 0.85,         # Morning energy - faster typing
+            "medium-high": 0.95,  # Afternoon - slightly faster
+            "medium": 1.1,        # Evening - slightly slower
+            "low": 1.4            # Late night - much slower, tired
+        }
+        
+        time_multiplier = time_multipliers.get(time_personality['energy'], 1.0)
+        
+        # Energy level fine-tuning (0.0-1.0 scale affects speed)
+        energy_level = mood_data.get('energy_level', 0.6)
+        energy_multiplier = 1.4 - (energy_level * 0.6)  # High energy = faster, low energy = slower
+        
+        # Calculate adjusted typing speed
+        final_multiplier = mood_multiplier * time_multiplier * energy_multiplier
+        adjusted_chars_per_second = base_chars_per_second / final_multiplier
+        
+        # Calculate base delay
+        base_delay = len(text) / adjusted_chars_per_second
+        
+        # Add human variance (±20%) but preserve mood influence
+        variance = random.uniform(0.85, 1.15)
+        
+        # Apply bounds: minimum 0.5s for very short messages, maximum 12s for long tired responses
+        if mood_data['current_mood'] == 'sleepy' and time_personality['energy'] == 'low':
+            # Very tired Izumi can take longer
+            delay = max(0.8, min(15.0, base_delay * variance))
+        elif mood_data['current_mood'] in ['excited', 'energetic']:
+            # Excited/energetic Izumi has tighter bounds
+            delay = max(0.5, min(6.0, base_delay * variance))
+        else:
+            # Normal bounds
+            delay = max(0.7, min(10.0, base_delay * variance))
         
         return delay
     
     async def _type_with_delay(self, channel, text: str):
-        """Show typing indicator for human-like duration based on message length"""
+        """Show typing indicator for human-like duration based on message length and mood"""
+        import random
+        
         delay = await self._calculate_typing_delay(text)
         
+        # Get current mood for typing behavior variations
+        try:
+            mood_data = self.bot.unified_memory.get_daily_mood()
+            current_mood = mood_data['current_mood']
+        except Exception:
+            current_mood = 'playful'  # Default fallback
+        
         async with channel.typing():
-            await asyncio.sleep(delay)
+            # Different typing patterns based on mood
+            if current_mood == 'sleepy' and delay > 8:
+                # Sleepy Izumi might pause mid-typing
+                await asyncio.sleep(delay * 0.6)
+                # Brief pause (like she dozed off for a second)
+                await asyncio.sleep(random.uniform(0.5, 1.5))
+                await asyncio.sleep(delay * 0.4)
+            elif current_mood == 'thoughtful' and delay > 5:
+                # Thoughtful Izumi has deliberate pauses
+                await asyncio.sleep(delay * 0.7)
+                await asyncio.sleep(random.uniform(0.3, 0.8))  # Thinking pause
+                await asyncio.sleep(delay * 0.3)
+            elif current_mood in ['excited', 'energetic'] and len(text) > 50:
+                # Excited typing - quick bursts
+                await asyncio.sleep(delay * 0.8)
+                await asyncio.sleep(random.uniform(0.1, 0.3))  # Quick breath
+                await asyncio.sleep(delay * 0.2)
+            else:
+                # Normal steady typing
+                await asyncio.sleep(delay)
     
     async def _generate_response_with_fallback(self, user_id: int, channel_id: int, prompt: str, original_message: str, username: str = None) -> Optional[str]:
         """Generate response with model fallback and error handling using shared channel context"""
