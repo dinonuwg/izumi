@@ -395,7 +395,7 @@ class UnifiedMemorySystem:
         context_parts = ["[ACTIVE CONVERSATION CONTEXT]"]
         context_parts.append("Recent conversation flow:")
         
-        for msg in sorted_messages[-8:]:  # Last 8 messages for context
+        for msg in sorted_messages[-20:]:  # Last 20 messages for better context
             user_name = msg.get('display_name', f"User{msg.get('user_id', 'Unknown')}")
             content = msg.get('content', '')[:150]  # Truncate long messages
             context_parts.append(f"{user_name}: {content}")

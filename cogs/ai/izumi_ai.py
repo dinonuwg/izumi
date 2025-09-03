@@ -30,6 +30,9 @@ class IzumiAI(commands.Cog):
         self.gemini_chat_sessions = {}  # {user_id: session_data}
         self.chat_history_limit = 250  # Messages per user
         
+        # Track Izumi's conversation participation
+        self.participation_tracker = {}  # {channel_id: {"last_participation": timestamp, "is_active": bool}}
+        
         # Setup Gemini
         self._setup_gemini()
         
@@ -95,8 +98,12 @@ class IzumiAI(commands.Cog):
         if self.bot.user in message.mentions:
             await self._handle_ai_response(message)
         else:
-            # Check for conversation participation opportunity
-            await self._check_conversation_participation(message)
+            # Check if someone mentioned "izumi" and she recently participated
+            if await self._should_continue_conversation(message):
+                await self._continue_conversation(message)
+            else:
+                # Check for conversation participation opportunity
+                await self._check_conversation_participation(message)
     
     async def _check_conversation_participation(self, message: discord.Message):
         """Check if Izumi should join an active conversation"""
@@ -115,21 +122,93 @@ class IzumiAI(commands.Cog):
             import asyncio
             await asyncio.sleep(2)
             
-            async with message.channel.typing():
-                try:
-                    # Generate response with conversation context
-                    response_text = await self._generate_response_with_fallback(
-                        user_id=message.author.id,
-                        prompt=context,
-                        original_message="[joining conversation]"
-                    )
+            try:
+                # Generate response with conversation context
+                response_text = await self._generate_response_with_fallback(
+                    user_id=message.author.id,
+                    prompt=context,
+                    original_message="[joining conversation]"
+                )
+                
+                if response_text and len(response_text.strip()) > 0:
+                    # Use human-like typing delay
+                    await self._type_with_delay(message.channel, response_text)
+                    await message.channel.send(response_text)
+                    print(f"✅ Successfully joined conversation: {response_text[:50]}...")
                     
-                    if response_text and len(response_text.strip()) > 0:
-                        await message.channel.send(response_text)
-                        print(f"✅ Successfully joined conversation: {response_text[:50]}...")
-                    
-                except Exception as e:
-                    print(f"❌ Error joining conversation: {e}")
+                    # Track that Izumi is now participating in this conversation
+                    self.participation_tracker[message.channel.id] = {
+                        "last_participation": time.time(),
+                        "is_active": True
+                    }
+                
+            except Exception as e:
+                print(f"❌ Error joining conversation: {e}")
+
+    async def _should_continue_conversation(self, message: discord.Message) -> bool:
+        """Check if Izumi should continue participating in a conversation"""
+        channel_id = message.channel.id
+        
+        # Check if we're tracking this channel
+        if channel_id not in self.participation_tracker:
+            return False
+        
+        tracker = self.participation_tracker[channel_id]
+        
+        # Check if Izumi is currently active in this conversation
+        if not tracker.get("is_active", False):
+            return False
+        
+        # Check if it's been less than 60 seconds since last participation
+        time_since_last = time.time() - tracker.get("last_participation", 0)
+        if time_since_last > 60:
+            # Reset participation status if too much time has passed
+            tracker["is_active"] = False
+            return False
+        
+        # Check if message contains "izumi" (case insensitive)
+        message_lower = message.content.lower()
+        if "izumi" in message_lower:
+            print(f"🎭 Continuing conversation in #{message.channel.name} - 'izumi' mentioned within 60s window")
+            return True
+        
+        return False
+
+    async def _continue_conversation(self, message: discord.Message):
+        """Continue participating in an ongoing conversation"""
+        if not self.gemini_model:
+            return
+        
+        try:
+            # Build context from recent conversation
+            context = self.context_builder.build_smart_context(
+                user_id=message.author.id,
+                guild_id=message.guild.id,
+                current_message=message.content,
+                channel_id=message.channel.id
+            )
+            
+            # Add specific instruction for continuing conversation
+            conversation_prompt = f"{context}\n\nUser message: {message.content}\n\nInstruction: Continue participating in this ongoing conversation naturally. Someone mentioned your name, so respond appropriately to the context."
+            
+            # Generate response
+            response_text = await self._generate_response_with_fallback(
+                user_id=message.author.id,
+                prompt=conversation_prompt,
+                original_message=message.content
+            )
+            
+            if response_text and len(response_text.strip()) > 0:
+                # Use human-like typing delay
+                await self._type_with_delay(message.channel, response_text)
+                await message.channel.send(response_text)
+                print(f"✅ Continued conversation: {response_text[:50]}...")
+                
+                # Update participation tracker
+                self.participation_tracker[message.channel.id]["last_participation"] = time.time()
+            
+        except Exception as e:
+            print(f"❌ Error continuing conversation: {e}")
     
     async def _handle_ai_response(self, message: discord.Message):
         """Generate and send AI response"""
@@ -144,53 +223,80 @@ class IzumiAI(commands.Cog):
             await message.reply(emotional_context["message"])
             return
         
-        # START TYPING INDICATOR - Shows "Izumi is typing..." in Discord
-        async with message.channel.typing():
-            try:
-                # Remove bot mention from message for processing
-                prompt = message.content.replace(f'<@{self.bot.user.id}>', '').strip()
-                prompt = message.content.replace(f'<@!{self.bot.user.id}>', '').strip()
-                
-                if not prompt:
-                    prompt = "hello"
-                
-                # Process mentions for AI context
-                processed_prompt = self.bot.process_mentions_for_ai(prompt, message.guild.id)
-                
-                # Build comprehensive context
-                context = self.context_builder.build_smart_context(
-                    user_id=message.author.id,
-                    guild_id=message.guild.id,
-                    current_message=processed_prompt,
-                    channel_id=message.channel.id
-                )
-                
-                # Create full prompt with context
-                full_prompt = f"{context}\n\nUser message: {processed_prompt}"
-                
-                # Generate response with fallback system
-                response_text = await self._generate_response_with_fallback(
-                    user_id=message.author.id,
-                    prompt=full_prompt,
-                    original_message=processed_prompt
-                )
-                
-                if not response_text:
-                    response_text = "sorry, having technical issues rn"
-                
-                # Trim response if too long
-                if len(response_text) > 2000:
-                    response_text = response_text[:1990] + "... (trimmed)"
-                
-                # Send response
-                await message.reply(response_text, mention_author=False)
-                
-                # Analyze the response for self-learning
-                await self._analyze_own_response(message.author.id, processed_prompt, response_text)
-                
-            except Exception as e:
-                print(f"Error in AI response: {e}")
-                await message.reply("something went wrong, try again?", mention_author=False)
+        try:
+            # Remove bot mention from message for processing
+            prompt = message.content.replace(f'<@{self.bot.user.id}>', '').strip()
+            prompt = message.content.replace(f'<@!{self.bot.user.id}>', '').strip()
+            
+            if not prompt:
+                prompt = "hello"
+            
+            # Process mentions for AI context
+            processed_prompt = self.bot.process_mentions_for_ai(prompt, message.guild.id)
+            
+            # Build comprehensive context
+            context = self.context_builder.build_smart_context(
+                user_id=message.author.id,
+                guild_id=message.guild.id,
+                current_message=processed_prompt,
+                channel_id=message.channel.id
+            )
+            
+            # Create full prompt with context
+            full_prompt = f"{context}\n\nUser message: {processed_prompt}"
+            
+            # Generate response with fallback system
+            response_text = await self._generate_response_with_fallback(
+                user_id=message.author.id,
+                prompt=full_prompt,
+                original_message=processed_prompt
+            )
+            
+            if not response_text:
+                response_text = "sorry, having technical issues rn"
+            
+            # Show typing indicator with human-like delay based on response length
+            await self._type_with_delay(message.channel, response_text)
+            
+            # Send the response
+            await message.reply(response_text, mention_author=False)
+            
+            # Track that Izumi is now participating in this conversation
+            self.participation_tracker[message.channel.id] = {
+                "last_participation": time.time(),
+                "is_active": True
+            }
+            
+        except Exception as e:
+            print(f"Error in AI response: {e}")
+            await message.reply("sorry, having technical issues rn", mention_author=False)
+            
+    async def _calculate_typing_delay(self, text: str) -> float:
+        """Calculate human-like typing delay based on 80 WPM (400 characters per minute)"""
+        import asyncio
+        
+        if not text:
+            return 1.0
+        
+        # Base calculation: 80 WPM = ~400 characters per minute = ~6.67 characters per second
+        chars_per_second = 6.67
+        base_delay = len(text) / chars_per_second
+        
+        # Add some human variance (±20%)
+        import random
+        variance = random.uniform(0.8, 1.2)
+        
+        # Minimum 1 second, maximum 8 seconds for user experience
+        delay = max(1.0, min(8.0, base_delay * variance))
+        
+        return delay
+    
+    async def _type_with_delay(self, channel, text: str):
+        """Show typing indicator for human-like duration based on message length"""
+        delay = await self._calculate_typing_delay(text)
+        
+        async with channel.typing():
+            await asyncio.sleep(delay)
     
     async def _generate_response_with_fallback(self, user_id: int, prompt: str, original_message: str) -> Optional[str]:
         """Generate response with model fallback and error handling"""
