@@ -828,6 +828,210 @@ class MemoryManagement(commands.Cog):
         except Exception as e:
             await ctx.send(f"❌ Error testing emotional context: {e}")
     
+    # Conversation Participation Commands
+    @commands.hybrid_command(name='convo_enable')
+    @commands.has_permissions(administrator=True)
+    async def enable_conversation_participation(self, ctx, channel: discord.TextChannel = None):
+        """Enable Izumi to participate in active conversations in a channel (Admin only)"""
+        target_channel = channel if channel else ctx.channel
+        
+        try:
+            # Add channel with default settings
+            self.bot.unified_memory.add_conversation_channel(target_channel.id)
+            
+            embed = discord.Embed(
+                title="🎭 Conversation Participation Enabled",
+                description=f"Izumi will now participate in active conversations in {target_channel.mention}",
+                color=0x00ff00
+            )
+            
+            embed.add_field(
+                name="Settings",
+                value="• Min messages: 5\n• Time window: 5 minutes\n• Min users: 2\n• Participation chance: 30%\n• Cooldown: 10 minutes",
+                inline=False
+            )
+            
+            embed.add_field(
+                name="Usage",
+                value="Izumi will automatically detect active conversations and occasionally join in naturally!",
+                inline=False
+            )
+            
+            await ctx.send(embed=embed)
+            
+        except Exception as e:
+            await ctx.send(f"❌ Error enabling conversation participation: {e}")
+    
+    @commands.hybrid_command(name='convo_disable')
+    @commands.has_permissions(administrator=True)
+    async def disable_conversation_participation(self, ctx, channel: discord.TextChannel = None):
+        """Disable Izumi's conversation participation in a channel (Admin only)"""
+        target_channel = channel if channel else ctx.channel
+        
+        try:
+            success = self.bot.unified_memory.remove_conversation_channel(target_channel.id)
+            
+            if success:
+                embed = discord.Embed(
+                    title="🎭 Conversation Participation Disabled",
+                    description=f"Izumi will no longer participate in conversations in {target_channel.mention}",
+                    color=0xff6b6b
+                )
+                await ctx.send(embed=embed)
+            else:
+                await ctx.send(f"❌ Conversation participation was not enabled in {target_channel.mention}")
+                
+        except Exception as e:
+            await ctx.send(f"❌ Error disabling conversation participation: {e}")
+    
+    @commands.hybrid_command(name='convo_list')
+    @commands.has_permissions(administrator=True)
+    async def list_conversation_channels(self, ctx):
+        """List all channels with conversation participation enabled (Admin only)"""
+        try:
+            conversation_channels = self.bot.unified_memory.memory_data.get('conversation_channels', {})
+            
+            if not conversation_channels:
+                await ctx.send("📋 No channels have conversation participation enabled.")
+                return
+            
+            embed = discord.Embed(
+                title="🎭 Conversation Participation Channels",
+                color=0x9966ff
+            )
+            
+            for channel_id_str, settings in conversation_channels.items():
+                try:
+                    channel = self.bot.get_channel(int(channel_id_str))
+                    if channel:
+                        last_participation = settings.get('last_participation', 0)
+                        if last_participation > 0:
+                            import time
+                            time_since = int(time.time() - last_participation)
+                            last_info = f"Last joined: {time_since}s ago"
+                        else:
+                            last_info = "Never joined"
+                        
+                        embed.add_field(
+                            name=f"#{channel.name}",
+                            value=f"Chance: {int(settings['participation_chance']*100)}%\n{last_info}",
+                            inline=True
+                        )
+                except:
+                    continue
+            
+            await ctx.send(embed=embed)
+            
+        except Exception as e:
+            await ctx.send(f"❌ Error listing conversation channels: {e}")
+    
+    @commands.hybrid_command(name='convo_settings')
+    @commands.has_permissions(administrator=True)
+    async def configure_conversation_settings(self, ctx, channel: discord.TextChannel = None, 
+                                           min_messages: int = None, participation_chance: float = None):
+        """Configure conversation participation settings for a channel (Admin only)"""
+        target_channel = channel if channel else ctx.channel
+        
+        try:
+            if not self.bot.unified_memory.is_conversation_participation_enabled(target_channel.id):
+                await ctx.send(f"❌ Conversation participation is not enabled in {target_channel.mention}. Use `/convo_enable` first.")
+                return
+            
+            channel_id_str = str(target_channel.id)
+            settings = self.bot.unified_memory.memory_data['conversation_channels'][channel_id_str]
+            
+            # Update settings if provided
+            updated = []
+            if min_messages is not None and 1 <= min_messages <= 20:
+                settings['min_messages'] = min_messages
+                updated.append(f"Min messages: {min_messages}")
+            
+            if participation_chance is not None and 0.0 <= participation_chance <= 1.0:
+                settings['participation_chance'] = participation_chance
+                updated.append(f"Participation chance: {int(participation_chance*100)}%")
+            
+            if updated:
+                self.bot.unified_memory.pending_saves = True
+                update_text = "\n".join(updated)
+            else:
+                update_text = "No valid updates provided"
+            
+            embed = discord.Embed(
+                title=f"🎭 Conversation Settings - #{target_channel.name}",
+                color=0x9966ff
+            )
+            
+            embed.add_field(
+                name="Current Settings",
+                value=f"• Min messages: {settings['min_messages']}\n"
+                      f"• Time window: {settings['time_window']//60} minutes\n"
+                      f"• Min users: {settings['min_users']}\n" 
+                      f"• Participation chance: {int(settings['participation_chance']*100)}%\n"
+                      f"• Cooldown: {settings['cooldown']//60} minutes",
+                inline=False
+            )
+            
+            if updated:
+                embed.add_field(name="Updated", value=update_text, inline=False)
+            
+            embed.add_field(
+                name="Usage",
+                value="`/convo_settings #channel min_messages:5 participation_chance:0.3`",
+                inline=False
+            )
+            
+            await ctx.send(embed=embed)
+            
+        except Exception as e:
+            await ctx.send(f"❌ Error configuring conversation settings: {e}")
+    
+    @commands.hybrid_command(name='convo_test')
+    @commands.has_permissions(administrator=True)
+    async def test_conversation_detection(self, ctx, channel: discord.TextChannel = None):
+        """Test conversation detection in a channel (Admin only)"""
+        target_channel = channel if channel else ctx.channel
+        
+        try:
+            analysis = self.bot.unified_memory.detect_active_conversation(target_channel.id)
+            
+            embed = discord.Embed(
+                title=f"🔍 Conversation Analysis - #{target_channel.name}",
+                color=0x00bfff
+            )
+            
+            embed.add_field(
+                name="Should Participate",
+                value="✅ Yes" if analysis["should_participate"] else "❌ No",
+                inline=True
+            )
+            
+            embed.add_field(
+                name="Reason",
+                value=analysis.get("reason", "analysis_successful"),
+                inline=True
+            )
+            
+            if analysis.get("message_count"):
+                embed.add_field(
+                    name="Recent Activity",
+                    value=f"{analysis['message_count']} messages from {len(analysis.get('participants', []))} users",
+                    inline=True
+                )
+            
+            if analysis.get("conversation_context"):
+                context_preview = analysis["conversation_context"][:200] + "..." if len(analysis["conversation_context"]) > 200 else analysis["conversation_context"]
+                embed.add_field(
+                    name="Context Preview",
+                    value=f"```{context_preview}```",
+                    inline=False
+                )
+            
+            await ctx.send(embed=embed)
+            
+        except Exception as e:
+            await ctx.send(f"❌ Error testing conversation detection: {e}")
+    
+    
     
     @commands.command(name='export_self_memories')
     @commands.has_permissions(administrator=True)

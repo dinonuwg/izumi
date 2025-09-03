@@ -94,6 +94,42 @@ class IzumiAI(commands.Cog):
         # Handle AI responses when mentioned
         if self.bot.user in message.mentions:
             await self._handle_ai_response(message)
+        else:
+            # Check for conversation participation opportunity
+            await self._check_conversation_participation(message)
+    
+    async def _check_conversation_participation(self, message: discord.Message):
+        """Check if Izumi should join an active conversation"""
+        if not self.gemini_model:
+            return
+        
+        conversation_analysis = self.learning_engine.detect_active_conversation(message.channel.id)
+        
+        if conversation_analysis["should_participate"]:
+            print(f"🎭 Joining conversation in #{message.channel.name} - {conversation_analysis['message_count']} messages from {len(conversation_analysis['participants'])} users")
+            
+            # Generate contextual response to join the conversation
+            context = conversation_analysis["conversation_context"]
+            
+            # Add a small delay to make it feel more natural
+            import asyncio
+            await asyncio.sleep(2)
+            
+            async with message.channel.typing():
+                try:
+                    # Generate response with conversation context
+                    response_text = await self._generate_response_with_fallback(
+                        user_id=message.author.id,
+                        prompt=context,
+                        original_message="[joining conversation]"
+                    )
+                    
+                    if response_text and len(response_text.strip()) > 0:
+                        await message.channel.send(response_text)
+                        print(f"✅ Successfully joined conversation: {response_text[:50]}...")
+                    
+                except Exception as e:
+                    print(f"❌ Error joining conversation: {e}")
     
     async def _handle_ai_response(self, message: discord.Message):
         """Generate and send AI response"""

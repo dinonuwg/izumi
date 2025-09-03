@@ -290,6 +290,120 @@ class UnifiedMemorySystem:
             self.pending_saves = True
             print(f"Decayed trust levels for {decay_count} inactive users")
     
+    def is_conversation_participation_enabled(self, channel_id: int) -> bool:
+        """Check if conversation participation is enabled for this channel"""
+        channel_id_str = str(channel_id)
+        return channel_id_str in self.memory_data.get('conversation_channels', {})
+    
+    def add_conversation_channel(self, channel_id: int, settings: dict = None):
+        """Add a channel for conversation participation"""
+        if 'conversation_channels' not in self.memory_data:
+            self.memory_data['conversation_channels'] = {}
+        
+        default_settings = {
+            'min_messages': 5,  # Minimum messages to trigger participation
+            'time_window': 300,  # 5 minutes
+            'min_users': 2,  # Minimum different users
+            'participation_chance': 0.3,  # 30% chance to join
+            'cooldown': 600,  # 10 minute cooldown between participations
+            'last_participation': 0
+        }
+        
+        if settings:
+            default_settings.update(settings)
+        
+        self.memory_data['conversation_channels'][str(channel_id)] = default_settings
+        self.pending_saves = True
+    
+    def remove_conversation_channel(self, channel_id: int):
+        """Remove a channel from conversation participation"""
+        channel_id_str = str(channel_id)
+        if 'conversation_channels' in self.memory_data and channel_id_str in self.memory_data['conversation_channels']:
+            del self.memory_data['conversation_channels'][channel_id_str]
+            self.pending_saves = True
+            return True
+        return False
+    
+    def detect_active_conversation(self, channel_id: int) -> dict:
+        """Detect if there's an active conversation Izumi should join"""
+        import time
+        
+        channel_id_str = str(channel_id)
+        
+        # Check if channel is enabled for participation
+        if not self.is_conversation_participation_enabled(channel_id):
+            return {"should_participate": False, "reason": "channel_not_enabled"}
+        
+        settings = self.memory_data['conversation_channels'][channel_id_str]
+        current_time = time.time()
+        
+        # Check cooldown
+        if current_time - settings['last_participation'] < settings['cooldown']:
+            return {"should_participate": False, "reason": "cooldown_active"}
+        
+        # Get recent messages from this channel
+        recent_messages = []
+        if hasattr(self, 'recent_messages') and channel_id in self.recent_messages:
+            cutoff_time = current_time - settings['time_window']
+            recent_messages = [
+                msg for msg in self.recent_messages[channel_id]
+                if msg.get('timestamp', 0) > cutoff_time and not msg.get('is_bot', False)
+            ]
+        
+        # Analyze conversation activity
+        if len(recent_messages) < settings['min_messages']:
+            return {"should_participate": False, "reason": "not_enough_messages"}
+        
+        # Count unique users
+        unique_users = set(msg.get('user_id') for msg in recent_messages)
+        if len(unique_users) < settings['min_users']:
+            return {"should_participate": False, "reason": "not_enough_users"}
+        
+        # Check if Izumi recently participated
+        izumi_recent = any(
+            msg.get('user_id') == self.bot.user.id 
+            for msg in recent_messages[-3:]  # Last 3 messages
+        )
+        if izumi_recent:
+            return {"should_participate": False, "reason": "recently_participated"}
+        
+        # Determine if should participate based on chance
+        import random
+        if random.random() < settings['participation_chance']:
+            # Update last participation time
+            settings['last_participation'] = current_time
+            self.pending_saves = True
+            
+            return {
+                "should_participate": True,
+                "conversation_context": self._build_conversation_context(recent_messages),
+                "participants": list(unique_users),
+                "message_count": len(recent_messages)
+            }
+        
+        return {"should_participate": False, "reason": "random_chance"}
+    
+    def _build_conversation_context(self, recent_messages: list) -> str:
+        """Build context from recent conversation for Izumi to understand and join"""
+        if not recent_messages:
+            return ""
+        
+        # Sort messages by timestamp
+        sorted_messages = sorted(recent_messages, key=lambda x: x.get('timestamp', 0))
+        
+        # Build conversation summary
+        context_parts = ["[ACTIVE CONVERSATION CONTEXT]"]
+        context_parts.append("Recent conversation flow:")
+        
+        for msg in sorted_messages[-8:]:  # Last 8 messages for context
+            user_name = msg.get('display_name', f"User{msg.get('user_id', 'Unknown')}")
+            content = msg.get('content', '')[:150]  # Truncate long messages
+            context_parts.append(f"{user_name}: {content}")
+        
+        context_parts.append("\n[INSTRUCTION] Join this conversation naturally. Reference what people are talking about and add meaningful input. Be casual and friendly.")
+        
+        return "\n".join(context_parts)
+    
     def get_emotional_context(self, user_id: int, guild_id: int) -> dict:
         """Analyze user interaction patterns to generate emotional context for responses"""
         import time
@@ -1004,26 +1118,35 @@ class UnifiedMemorySystem:
     # ==================== RECENT MESSAGE CONTEXT ====================
     
     async def store_recent_message(self, message):
-        """Store recent messages for chat context"""
+        """Store recent messages for chat context and conversation detection"""
         channel_id = message.channel.id
+        
+        if not hasattr(self, 'recent_messages'):
+            self.recent_messages = {}
         
         if channel_id not in self.recent_messages:
             self.recent_messages[channel_id] = []
         
-        # Create message data for context
+        # Create message data for context and conversation detection
         message_data = {
-            'author_id': message.author.id,
-            'author_name': message.author.display_name,
+            'user_id': message.author.id,
+            'display_name': message.author.display_name,
             'content': message.content[:300],  # Limit content length
             'timestamp': message.created_at.timestamp(),
+            'is_bot': message.author.bot,
             'mentions_bot': hasattr(self.bot, 'user') and self.bot.user in message.mentions,
             'has_attachments': len(message.attachments) > 0,
-            'channel_id': channel_id
+            'channel_id': channel_id,
+            # Legacy fields for backwards compatibility
+            'author_id': message.author.id,
+            'author_name': message.author.display_name
         }
         
         self.recent_messages[channel_id].append(message_data)
         
-        # Keep only the most recent messages
+        # Keep only the most recent messages (50 per channel)
+        if len(self.recent_messages[channel_id]) > 50:
+            self.recent_messages[channel_id] = self.recent_messages[channel_id][-50:]
         if len(self.recent_messages[channel_id]) > self.context_message_limit:
             self.recent_messages[channel_id] = self.recent_messages[channel_id][-self.context_message_limit:]
     
