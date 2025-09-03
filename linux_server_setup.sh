@@ -270,11 +270,14 @@ Type=simple
 User=$BOT_USER
 WorkingDirectory=$BOT_DIR
 Environment=PATH=$BOT_DIR/venv/bin
+Environment=PYTHONUNBUFFERED=1
+Environment=PYTHONPATH=$BOT_DIR
 ExecStart=$BOT_DIR/venv/bin/python bot.py
 Restart=always
 RestartSec=10
 StandardOutput=journal
 StandardError=journal
+SyslogIdentifier=izumi-bot
 
 [Install]
 WantedBy=multi-user.target

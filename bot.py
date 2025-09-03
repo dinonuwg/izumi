@@ -167,39 +167,55 @@ class MinimalBot(commands.Bot):
 
     async def setup_hook(self):
         """called when bot is starting up - load all cogs"""
-        try:
-            # load ai cog system
-            await self.load_extension('cogs.ai.izumi_ai')
-            await self.load_extension('cogs.ai.memory')
-            print("✅ ai system loaded successfully!")
-        except Exception as e:
-            print(f"❌ failed to load ai system: {e}")
+        print("🔄 Loading bot extensions...")
         
-        # load other cogs
-        try:
-            await self.load_extension('cogs.moderation.birthdays')
-            await self.load_extension('cogs.moderation.leveling')
-            await self.load_extension('cogs.moderation.level_roles')
-            await self.load_extension('cogs.moderation.moderation')
-            await self.load_extension('cogs.moderation.social')
-            await self.load_extension('cogs.moderation.utility')
-            
-            # load all osugacha cogs
-            await self.load_extension('cogs.osugacha.osugacha_commands')
-            await self.load_extension('cogs.osugacha.osugacha_store')
-            await self.load_extension('cogs.osugacha.osugacha_cards')
-            await self.load_extension('cogs.osugacha.osugacha_trading')
-            await self.load_extension('cogs.osugacha.osugacha_leaderboard')
-            await self.load_extension('cogs.osugacha.osugacha_pvp')
-            await self.load_extension('cogs.osugacha.osugacha_party')
-            await self.load_extension('cogs.osugacha.osugacha_gambling')
-            await self.load_extension('cogs.osugacha.osugacha_events')
-            await self.load_extension('cogs.osugacha.osugacha_event_crates')
-            await self.load_extension('cogs.osugacha.osugacha_channels')
-            
-            print("✅ all cogs loaded!")
-        except Exception as e:
-            print(f"❌ error loading cogs: {e}")
+        # load ai cog system
+        ai_cogs = ['cogs.ai.izumi_ai', 'cogs.ai.memory']
+        for cog in ai_cogs:
+            try:
+                await self.load_extension(cog)
+                print(f"✅ loaded {cog}")
+            except Exception as e:
+                print(f"❌ failed to load {cog}: {e}")
+        
+        # load moderation cogs
+        moderation_cogs = [
+            'cogs.moderation.birthdays',
+            'cogs.moderation.leveling', 
+            'cogs.moderation.level_roles',
+            'cogs.moderation.moderation',
+            'cogs.moderation.social',
+            'cogs.moderation.utility'
+        ]
+        for cog in moderation_cogs:
+            try:
+                await self.load_extension(cog)
+                print(f"✅ loaded {cog}")
+            except Exception as e:
+                print(f"❌ failed to load {cog}: {e}")
+        
+        # load all osugacha cogs
+        osugacha_cogs = [
+            'cogs.osugacha.osugacha_commands',
+            'cogs.osugacha.osugacha_store',
+            'cogs.osugacha.osugacha_cards',
+            'cogs.osugacha.osugacha_trading',
+            'cogs.osugacha.osugacha_leaderboard',
+            'cogs.osugacha.osugacha_pvp',
+            'cogs.osugacha.osugacha_party',
+            'cogs.osugacha.osugacha_gambling',
+            'cogs.osugacha.osugacha_events',
+            'cogs.osugacha.osugacha_event_crates',
+            'cogs.osugacha.osugacha_channels'
+        ]
+        for cog in osugacha_cogs:
+            try:
+                await self.load_extension(cog)
+                print(f"✅ loaded {cog}")
+            except Exception as e:
+                print(f"❌ failed to load {cog}: {e}")
+        
+        print("🎯 Finished loading extensions!")
 
     async def on_ready(self):
         print(f'🟢 {self.user} has connected to discord!')
@@ -881,34 +897,56 @@ def sync_save():
 signal.signal(signal.SIGINT, signal_handler)
 
 if __name__ == "__main__":
+    print("🚀 Starting Izumi Discord Bot...")
+    
+    # Load environment variables
     load_dotenv()
     TOKEN = os.getenv('DISCORD_TOKEN')
-    if not TOKEN:
-        print("error: discord_token not found in .env file!")
-        exit()
+    GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
     
-    bot = MinimalBot()
+    # Check required environment variables
+    if not TOKEN:
+        print("❌ Error: DISCORD_TOKEN not found in .env file!")
+        print("📝 Please add your Discord bot token to the .env file")
+        exit(1)
+    
+    if not GEMINI_API_KEY:
+        print("⚠️ Warning: GEMINI_API_KEY not found in .env file!")
+        print("📝 AI features will not work without this token")
+    
+    print("✅ Environment variables loaded")
+    
+    try:
+        bot = MinimalBot()
+        print("✅ Bot instance created successfully")
+    except Exception as e:
+        print(f"❌ Failed to create bot instance: {e}")
+        exit(1)
     
     # add retry logic for connection issues
     max_retries = 3
     retry_count = 0
     
+    print(f"🔗 Connecting to Discord...")
+    
     while retry_count < max_retries:
         try:
-            if TOKEN:
-                bot.run(TOKEN)
-            else:
-                print("bot token not found. please set discord_token in ur .env file.")
+            bot.run(TOKEN)
             break  # if successful, break out of loop
         except (aiohttp.client_exceptions.WSServerHandshakeError, AttributeError) as e:
             retry_count += 1
-            print(f"connection failed (attempt {retry_count}/{max_retries}): {e}")
+            print(f"❌ Connection failed (attempt {retry_count}/{max_retries}): {e}")
             if retry_count < max_retries:
-                print("retrying in 5 seconds...")
+                print("🔄 Retrying in 5 seconds...")
                 time.sleep(5)
             else:
-                print("max retries reached. please check ur internet connection and discord's status.")
+                print("💀 Max retries reached. Please check your internet connection and Discord's status.")
                 break
+        except discord.LoginFailure:
+            print("❌ Invalid Discord token! Please check your .env file.")
+            break
         except Exception as e:
-            print(f"unexpected error: {e}")
+            print(f"❌ Unexpected error: {e}")
+            import traceback
+            traceback.print_exc()
             break
