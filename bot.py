@@ -371,16 +371,16 @@ class MinimalBot(commands.Bot):
         # Wait an additional hour after startup before starting proactive messages
         await asyncio.sleep(3600)
 
-    @tasks.loop(hours=3)  # Check every 3 hours for birthday pings
+    @tasks.loop(minutes=15)  # Check every 15 minutes for scheduled birthday pings
     async def birthday_ping_task(self):
-        """Send random birthday pings during the preferred 16-hour window"""
+        """Check for scheduled birthday pings during the birthday window (8 AM - 4 PM UTC)"""
         from datetime import datetime, timezone
         utc_now = datetime.now(timezone.utc)
         current_hour = utc_now.hour
         
-        # Preferred window: 8 AM to 11:59 PM UTC (16 hours)
-        # This covers most active hours globally
-        if 8 <= current_hour <= 23:
+        # Birthday ping window: 8 AM to 4 PM UTC (8 hours)
+        # More focused window for birthday celebrations
+        if 8 <= current_hour <= 16:
             try:
                 unified_memory = self.get_cog('UnifiedMemory')
                 if unified_memory:

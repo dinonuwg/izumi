@@ -493,13 +493,18 @@ class UnifiedMemorySystem:
     # ==================== BIRTHDAY PING SYSTEM ====================
     
     async def send_random_birthday_ping(self, bot):
-        """Send one birthday ping per person during their 24-hour birthday period"""
+        """Send one birthday ping per person at a random time between 8 AM - 4 PM UTC"""
         from datetime import datetime, timezone
         from utils.helpers import is_birthday_today_extended
         import random
         
         utc_now = datetime.now(timezone.utc)
         current_date = utc_now.strftime('%m-%d')
+        current_hour = utc_now.hour
+        
+        # Only operate during the birthday ping window (8 AM - 4 PM UTC)
+        if not (8 <= current_hour <= 16):
+            return None
         
         birthday_users = []
         
@@ -537,69 +542,99 @@ class UnifiedMemorySystem:
         if not birthday_users:
             return None
         
-        # Filter out users who already got their ONE birthday ping
-        eligible_users = []
+        # Filter users who need their birthday ping scheduled or sent
         for user in birthday_users:
             user_ping_key = f'birthday_pinged_{user["user_id"]}_{current_date}'
+            schedule_key = f'birthday_scheduled_{user["user_id"]}_{current_date}'
+            
             already_pinged = self.memory_data.get(user_ping_key, False)
+            already_scheduled = self.memory_data.get(schedule_key, False)
             
-            # Only include users who haven't been pinged yet today
-            if not already_pinged:
-                eligible_users.append(user)
-        
-        if not eligible_users:
-            return None  # All birthday users already got their ping
+            # Skip if already pinged
+            if already_pinged:
+                continue
+                
+            # If not scheduled yet, schedule a random time
+            if not already_scheduled:
+                # Generate random time between 8 AM and 4 PM UTC
+                random_hour = random.randint(8, 16)  # 8 AM to 4 PM
+                random_minute = random.randint(0, 59)
+                
+                # Create target datetime for today
+                target_time = utc_now.replace(hour=random_hour, minute=random_minute, second=0, microsecond=0)
+                
+                # If the random time is in the past, schedule for tomorrow
+                if target_time <= utc_now:
+                    # For past times, we'll send immediately (but only once per check)
+                    pass
+                else:
+                    # Store the scheduled time
+                    schedule_time_key = f'birthday_time_{user["user_id"]}_{current_date}'
+                    self.memory_data[schedule_time_key] = target_time.timestamp()
+                
+                # Mark as scheduled
+                self.memory_data[schedule_key] = True
+                self.pending_saves = True
+                continue
             
-        # Pick a random eligible user
-        chosen_user = random.choice(eligible_users)
-        chosen_user_id = int(chosen_user['user_id'])
-        
-        # Find an appropriate channel (preferably where they're active)
-        target_channel = await self._find_birthday_ping_channel(bot, chosen_user_id)
-        if not target_channel:
-            return None
+            # Check if it's time to send the scheduled ping
+            schedule_time_key = f'birthday_time_{user["user_id"]}_{current_date}'
+            scheduled_timestamp = self.memory_data.get(schedule_time_key, 0)
             
-        # Generate age-aware birthday messages
-        user = bot.get_user(chosen_user_id)
-        if not user:
-            return None
-            
-        age_context = ""
-        if chosen_user['year']:
-            current_year = utc_now.year
-            age = current_year - chosen_user['year']
-            if age > 0:
-                age_context = f" (turning {age})" if age < 100 else ""
-        
-        # Birthday messages with optional age context
-        birthday_messages = [
-            f"🎂 Hey {user.mention}! Hope you're having an amazing birthday{age_context}! ✨",
-            f"🎉 Happy birthday {user.mention}! 🥳 Hope your special day is wonderful{age_context}!",
-            f"✨ {user.mention}! It's your birthday{age_context}! 🎂 Hope you're celebrating properly! 🎉",
-            f"🎈 Birthday vibes for {user.mention}! 🎂 Hope you're having the best day ever{age_context}!",
-            f"🥳 {user.mention}! Another year older, another year more awesome{age_context}! Happy birthday! 🎂",
-            f"🎊 {user.mention}! Hope your birthday{age_context} is filled with cake, fun, and everything you love! 🎂",
-            f"🌟 Happy birthday {user.mention}! 🎂 May this year bring you lots of happiness{age_context}! ✨",
-            f"🎂 {user.mention}! Sending you birthday wishes and virtual cake! 🍰 Hope it's amazing{age_context}!",
-            f"🎉 It's {user.mention}'s special day{age_context}! 🎂 Hope you're surrounded by friends and cake! 🥳",
-            f"🎈 {user.mention}! Another trip around the sun{age_context}! 🌟 Happy birthday! 🎂"
-        ]
-        
-        try:
-            message = random.choice(birthday_messages)
-            await target_channel.send(message)
-            
-            # Mark this user as having received their birthday ping
-            user_ping_key = f'birthday_pinged_{chosen_user["user_id"]}_{current_date}'
-            self.memory_data[user_ping_key] = True
-            self.pending_saves = True
-            
-            age_info = f" (age {age})" if chosen_user['year'] else ""
-            return f"Sent birthday ping to {user.display_name}{age_info} in {target_channel.name}"
-            
-        except Exception as e:
-            print(f"Error sending birthday ping: {e}")
-            
+            # If it's time (or past time) to send the ping
+            if scheduled_timestamp and utc_now.timestamp() >= scheduled_timestamp:
+                chosen_user_id = int(user['user_id'])
+                
+                # Find an appropriate channel
+                target_channel = await self._find_birthday_ping_channel(bot, chosen_user_id)
+                if not target_channel:
+                    continue
+                    
+                # Generate age-aware birthday messages
+                discord_user = bot.get_user(chosen_user_id)
+                if not discord_user:
+                    continue
+                    
+                age_context = ""
+                if user['year']:
+                    current_year = utc_now.year
+                    age = current_year - user['year']
+                    if age > 0:
+                        age_context = f" (turning {age})" if age < 100 else ""
+                
+                # Birthday messages with optional age context
+                birthday_messages = [
+                    f"🎂 Hey {discord_user.mention}! Hope you're having an amazing birthday{age_context}! ✨",
+                    f"🎉 Happy birthday {discord_user.mention}! 🥳 Hope your special day is wonderful{age_context}!",
+                    f"✨ {discord_user.mention}! It's your birthday{age_context}! 🎂 Hope you're celebrating properly! 🎉",
+                    f"🎈 Birthday vibes for {discord_user.mention}! 🎂 Hope you're having the best day ever{age_context}!",
+                    f"🥳 {discord_user.mention}! Another year older, another year more awesome{age_context}! Happy birthday! 🎂",
+                    f"🎊 {discord_user.mention}! Hope your birthday{age_context} is filled with cake, fun, and everything you love! 🎂",
+                    f"🌟 Happy birthday {discord_user.mention}! 🎂 May this year bring you lots of happiness{age_context}! ✨",
+                    f"🎂 {discord_user.mention}! Sending you birthday wishes and virtual cake! 🍰 Hope it's amazing{age_context}!",
+                    f"🎉 It's {discord_user.mention}'s special day{age_context}! 🎂 Hope you're surrounded by friends and cake! 🥳",
+                    f"🎈 {discord_user.mention}! Another trip around the sun{age_context}! 🌟 Happy birthday! 🎂"
+                ]
+                
+                try:
+                    message = random.choice(birthday_messages)
+                    await target_channel.send(message)
+                    
+                    # Mark this user as having received their birthday ping
+                    self.memory_data[user_ping_key] = True
+                    self.pending_saves = True
+                    
+                    # Clean up scheduling data
+                    if schedule_time_key in self.memory_data:
+                        del self.memory_data[schedule_time_key]
+                    
+                    age_info = f" (age {age})" if user['year'] else ""
+                    scheduled_time = datetime.fromtimestamp(scheduled_timestamp, timezone.utc)
+                    return f"Sent scheduled birthday ping to {discord_user.display_name}{age_info} in {target_channel.name} (scheduled for {scheduled_time.strftime('%H:%M UTC')})"
+                    
+                except Exception as e:
+                    print(f"Error sending birthday ping: {e}")
+                    
         return None
     
     async def _find_birthday_ping_channel(self, bot, user_id):
