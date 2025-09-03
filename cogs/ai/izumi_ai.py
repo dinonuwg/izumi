@@ -27,8 +27,8 @@ class IzumiAI(commands.Cog):
         
         # Initialize Gemini AI
         self.gemini_model = None
-        self.gemini_chat_sessions = {}  # {user_id: session_data}
-        self.chat_history_limit = 250  # Messages per user
+        self.gemini_chat_sessions = {}  # {channel_id: session_data} - Shared per channel
+        self.chat_history_limit = 250  # Messages per channel
         
         # Track Izumi's conversation participation
         self.participation_tracker = {}  # {channel_id: {"last_participation": timestamp, "is_active": bool}}
@@ -126,8 +126,10 @@ class IzumiAI(commands.Cog):
                 # Generate response with conversation context
                 response_text = await self._generate_response_with_fallback(
                     user_id=message.author.id,
+                    channel_id=message.channel.id,
                     prompt=context,
-                    original_message="[joining conversation]"
+                    original_message="[joining conversation]",
+                    username=message.author.display_name
                 )
                 
                 if response_text and len(response_text.strip()) > 0:
@@ -258,8 +260,10 @@ class IzumiAI(commands.Cog):
             # Generate response
             response_text = await self._generate_response_with_fallback(
                 user_id=message.author.id,
+                channel_id=message.channel.id,
                 prompt=conversation_prompt,
-                original_message=message.content
+                original_message=message.content,
+                username=message.author.display_name
             )
             
             if response_text and len(response_text.strip()) > 0:
@@ -379,8 +383,10 @@ class IzumiAI(commands.Cog):
             # Generate response with fallback system
             response_text = await self._generate_response_with_fallback(
                 user_id=message.author.id,
+                channel_id=message.channel.id,
                 prompt=full_prompt,
-                original_message=processed_prompt
+                original_message=processed_prompt,
+                username=message.author.display_name
             )
             
             if not response_text:
@@ -429,9 +435,15 @@ class IzumiAI(commands.Cog):
         async with channel.typing():
             await asyncio.sleep(delay)
     
-    async def _generate_response_with_fallback(self, user_id: int, prompt: str, original_message: str) -> Optional[str]:
-        """Generate response with model fallback and error handling"""
-        session_data = self._get_or_create_session(user_id)
+    async def _generate_response_with_fallback(self, user_id: int, channel_id: int, prompt: str, original_message: str, username: str = None) -> Optional[str]:
+        """Generate response with model fallback and error handling using shared channel context"""
+        session_data = self._get_or_create_session(channel_id)
+        
+        # Create user-aware prompt for shared conversation
+        if username:
+            user_aware_prompt = f"[User: {username}] {prompt}"
+        else:
+            user_aware_prompt = f"[User ID: {user_id}] {prompt}"
         
         MODEL_HIERARCHY = [
             "gemini-2.5-flash",
@@ -457,7 +469,7 @@ class IzumiAI(commands.Cog):
                     session_data["model_index"] = i
                 
                 chat = session_data["chat"]
-                response = await chat.send_message_async(prompt)
+                response = await chat.send_message_async(user_aware_prompt)
                 return response.text
                 
             except Exception as e:
@@ -475,17 +487,17 @@ class IzumiAI(commands.Cog):
         # All models failed
         return None
     
-    def _get_or_create_session(self, user_id: int) -> Dict:
-        """Get or create chat session for user"""
-        if user_id not in self.gemini_chat_sessions:
-            self.gemini_chat_sessions[user_id] = {
+    def _get_or_create_session(self, channel_id: int) -> Dict:
+        """Get or create chat session for channel (shared by all users)"""
+        if channel_id not in self.gemini_chat_sessions:
+            self.gemini_chat_sessions[channel_id] = {
                 "chat": None,
                 "model_index": 0,
                 "message_count": 0,
                 "created_at": time.time()
             }
         
-        session = self.gemini_chat_sessions[user_id]
+        session = self.gemini_chat_sessions[channel_id]
         
         # Create chat if doesn't exist
         if not session["chat"]:
@@ -501,7 +513,7 @@ class IzumiAI(commands.Cog):
             try:
                 session["chat"] = self.gemini_model.start_chat()
                 session["message_count"] = 1
-                print(f"Reset chat session for user {user_id} (hit message limit)")
+                print(f"Reset chat session for channel {channel_id} (hit message limit)")
             except Exception as e:
                 print(f"Failed to reset chat session: {e}")
         
