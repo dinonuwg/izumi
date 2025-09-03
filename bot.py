@@ -382,9 +382,8 @@ class MinimalBot(commands.Bot):
         # More focused window for birthday celebrations
         if 8 <= current_hour <= 16:
             try:
-                unified_memory = self.get_cog('UnifiedMemory')
-                if unified_memory:
-                    result = await unified_memory.send_random_birthday_ping(self)
+                if hasattr(self, 'unified_memory'):
+                    result = await self.unified_memory.send_random_birthday_ping(self)
                     if result:
                         print(f"🎂 Birthday ping: {result}")
             except Exception as e:

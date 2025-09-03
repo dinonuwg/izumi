@@ -590,13 +590,13 @@ class UtilityCog(commands.Cog, name="Utility"):
     @commands.has_permissions(administrator=True)
     async def trigger_proactive_message(self, ctx):
         """Manually trigger a proactive message from Izumi (admin only)"""
-        unified_memory = self.bot.get_cog('UnifiedMemory')
-        if not unified_memory:
+        # Access unified memory system directly from bot
+        if not hasattr(self.bot, 'unified_memory'):
             await ctx.send("❌ Unified memory system not available")
             return
             
         try:
-            result = await unified_memory.send_unprompted_message(self.bot, channel_id=ctx.channel.id)
+            result = await self.bot.unified_memory.send_unprompted_message(self.bot, channel_id=ctx.channel.id)
             if result:
                 await ctx.send(f"✅ Triggered proactive message!", delete_after=5)
             else:
