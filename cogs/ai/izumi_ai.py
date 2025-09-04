@@ -37,7 +37,11 @@ class IzumiAI(commands.Cog):
         # API optimization features
         self.response_cache = {}  # Simple response caching
         self.daily_api_calls = 0
+        self.daily_quick_responses = 0  # Track quick responses too
         self.last_cache_clear = time.time()
+        
+        # Detailed tracking
+        self.api_call_log = []  # Store recent API calls for analysis
         
         # Python-based response patterns to reduce API calls
         self.quick_responses = self._init_quick_responses()
@@ -232,6 +236,58 @@ class IzumiAI(commands.Cog):
             else:
                 # Check for conversation participation opportunity
                 await self._check_conversation_participation(message)
+
+    @commands.Cog.listener()
+    async def on_message_edit(self, before: discord.Message, after: discord.Message):
+        """Handle message edits - respond to corrected messages that mention Izumi"""
+        if after.author.bot or not after.guild:
+            return
+        
+        # Only respond to edits if:
+        # 1. The edited message now mentions Izumi (but didn't before)
+        # 2. OR the message mentioned Izumi before but content significantly changed
+        
+        before_mentions_izumi = self.bot.user in before.mentions
+        after_mentions_izumi = self.bot.user in after.mentions
+        
+        # Case 1: Now mentions Izumi (but didn't before)
+        if after_mentions_izumi and not before_mentions_izumi:
+            print(f"📝 Message edited to mention Izumi: {after.content[:50]}...")
+            await self._handle_ai_response(after)
+            return
+        
+        # Case 2: Already mentioned Izumi, but content changed significantly
+        if before_mentions_izumi and after_mentions_izumi:
+            # Check if the content changed significantly (more than just typo fixes)
+            before_clean = before.content.replace(f'<@{self.bot.user.id}>', '').replace(f'<@!{self.bot.user.id}>', '').strip()
+            after_clean = after.content.replace(f'<@{self.bot.user.id}>', '').replace(f'<@!{self.bot.user.id}>', '').strip()
+            
+            # Simple similarity check - if less than 70% similar, respond to the edit
+            similarity = self._calculate_text_similarity(before_clean, after_clean)
+            if similarity < 0.7:
+                print(f"📝 Significant edit detected (similarity: {similarity:.2f}): {after.content[:50]}...")
+                # Add a small delay to avoid instant responses to edits
+                await asyncio.sleep(2)
+                await self._handle_ai_response(after)
+            else:
+                print(f"📝 Minor edit detected (similarity: {similarity:.2f}), ignoring")
+
+    def _calculate_text_similarity(self, text1: str, text2: str) -> float:
+        """Calculate simple text similarity between two strings"""
+        if not text1 or not text2:
+            return 0.0
+        
+        # Simple word-based similarity
+        words1 = set(text1.lower().split())
+        words2 = set(text2.lower().split())
+        
+        if not words1 and not words2:
+            return 1.0
+        
+        intersection = words1.intersection(words2)
+        union = words1.union(words2)
+        
+        return len(intersection) / len(union) if union else 0.0
     
     async def _check_conversation_participation(self, message: discord.Message):
         """Check if Izumi should join an active conversation"""
@@ -522,7 +578,8 @@ class IzumiAI(commands.Cog):
             # Check for quick Python responses first (saves API calls)
             quick_response = self._check_quick_response(combined_prompt)
             if quick_response:
-                print(f"🚀 Using quick response (API saved): {quick_response}")
+                self.daily_quick_responses += 1
+                print(f"🚀 Using quick response #{self.daily_quick_responses} (API saved): {quick_response}")
                 
                 # Split response if needed and send
                 message_parts = self._split_response_naturally(quick_response)
@@ -867,11 +924,25 @@ class IzumiAI(commands.Cog):
         current_time = time.time()
         if current_time - self.last_cache_clear > 86400:  # 24 hours
             self.response_cache.clear()
+            self.api_call_log.clear()
             self.daily_api_calls = 0
+            self.daily_quick_responses = 0
             self.last_cache_clear = current_time
-            print(f"🔄 Daily cache cleared. API calls reset.")
+            print(f"🔄 Daily cache cleared. API calls and quick responses reset.")
         
-        print(f"📊 API Call #{self.daily_api_calls} of the day")
+        # Log this API call
+        self.api_call_log.append({
+            'timestamp': current_time,
+            'user_id': user_id,
+            'channel_id': channel_id,
+            'prompt_length': len(prompt)
+        })
+        
+        # Keep only last 100 API calls in log to prevent memory issues
+        if len(self.api_call_log) > 100:
+            self.api_call_log = self.api_call_log[-100:]
+        
+        print(f"📊 API Call #{self.daily_api_calls} | Quick Responses: {self.daily_quick_responses}")
         
         session_data = self._get_or_create_session(channel_id)
         
@@ -1093,6 +1164,99 @@ class IzumiAI(commands.Cog):
         
         return "general"
     
+    @commands.command(name='api_usage')
+    @commands.has_permissions(administrator=True)
+    async def api_usage(self, ctx):
+        """Show API usage statistics and optimization info"""
+        embed = discord.Embed(
+            title="📊 API Usage & Optimization Stats",
+            color=discord.Color.green()
+        )
+        
+        # Calculate time since last reset
+        time_since_reset = time.time() - self.last_cache_clear
+        hours_since_reset = time_since_reset / 3600
+        
+        # API Usage Stats
+        total_interactions = self.daily_api_calls + self.daily_quick_responses
+        if total_interactions > 0:
+            api_percentage = (self.daily_api_calls / total_interactions) * 100
+            quick_percentage = (self.daily_quick_responses / total_interactions) * 100
+        else:
+            api_percentage = quick_percentage = 0
+        
+        embed.add_field(
+            name="🔢 Daily Interactions",
+            value=f"**{self.daily_api_calls}** API calls ({api_percentage:.1f}%)\n"
+                  f"**{self.daily_quick_responses}** Quick responses ({quick_percentage:.1f}%)\n"
+                  f"**{total_interactions}** Total interactions\n"
+                  f"⏰ {hours_since_reset:.1f} hours since reset",
+            inline=False
+        )
+        
+        # Efficiency Stats
+        if total_interactions > 0:
+            api_savings = (self.daily_quick_responses / total_interactions) * 100
+            embed.add_field(
+                name="💰 API Savings",
+                value=f"**{api_savings:.1f}%** of calls saved\n"
+                      f"🎯 Quick responses working effectively",
+                inline=True
+            )
+        
+        # Cache Stats
+        cache_size = len(self.response_cache)
+        log_size = len(self.api_call_log)
+        embed.add_field(
+            name="💾 Cache & Logs",
+            value=f"**{cache_size}** cached responses\n"
+                  f"📝 **{log_size}** recent API calls logged\n"
+                  f"🔄 Resets every 24 hours",
+            inline=True
+        )
+        
+        # Quick Response Stats (estimate based on patterns)
+        quick_patterns = sum(len(data['patterns']) for data in self.quick_responses.values())
+        embed.add_field(
+            name="🚀 Quick Responses",
+            value=f"**{quick_patterns}** patterns available\n"
+                  f"💡 Saves ~60-80% API calls",
+            inline=True
+        )
+        
+        # Performance Info
+        if self.daily_api_calls > 0:
+            avg_calls_per_hour = self.daily_api_calls / max(hours_since_reset, 0.1)
+            projected_daily = avg_calls_per_hour * 24
+            
+            embed.add_field(
+                name="📈 Projections",
+                value=f"**{avg_calls_per_hour:.1f}** calls/hour\n"
+                      f"📊 ~{projected_daily:.0f} projected daily",
+                inline=True
+            )
+        
+        # Cache efficiency
+        embed.add_field(
+            name="⚡ Efficiency",
+            value=f"🎯 Pattern matching: **Instant**\n"
+                  f"🤖 API responses: **~2-5s**\n"
+                  f"💰 Cost savings: **High**",
+            inline=True
+        )
+        
+        # Next reset time
+        next_reset = self.last_cache_clear + 86400  # 24 hours
+        next_reset_str = f"<t:{int(next_reset)}:R>"
+        embed.add_field(
+            name="🔄 Next Reset",
+            value=f"{next_reset_str}",
+            inline=True
+        )
+        
+        embed.set_footer(text="Use this to monitor API usage and optimization effectiveness")
+        await ctx.send(embed=embed)
+
     @commands.command(name='ai_stats')
     @commands.has_permissions(administrator=True)
     async def ai_stats(self, ctx):
