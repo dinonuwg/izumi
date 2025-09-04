@@ -1055,6 +1055,55 @@ class MemoryManagement(commands.Cog):
         
         await ctx.send("📁 Here's Izumi's self-memory export:", file=file)
 
+    @app_commands.command(name="export_self_memories", description="Export Izumi's self-concept memories (Admin only)")
+    async def slash_export_self_memories(self, interaction: discord.Interaction):
+        """Export self-concept memories to a file (bot owner only)"""
+        if interaction.user.id != BOT_OWNER_ID:
+            await interaction.response.send_message("❌ Only the bot owner can use this command.", ephemeral=True)
+            return
+        
+        await interaction.response.defer(ephemeral=True)
+        
+        try:
+            self_memories = self.bot.get_izumi_self_memories()
+            
+            if not any(self_memories.values()):
+                await interaction.followup.send("❌ No self-concept data found.")
+                return
+                
+            # Create formatted export
+            export_text = "=== IZUMI'S SELF-CONCEPT MEMORIES ===\n\n"
+            
+            for category, values in self_memories.items():
+                if values:  # Only export categories with content
+                    category_name = category.replace('_', ' ').title()
+                    export_text += f"{category_name.upper()}:\n"
+                    
+                    if isinstance(values, list):
+                        for item in values:
+                            export_text += f"- {item}\n"
+                    else:
+                        export_text += f"- {values}\n"
+                    export_text += "\n"
+                
+            # Save to file and send
+            import io
+            file_obj = io.StringIO(export_text)
+            file = discord.File(file_obj, filename="izumi_self_memories.txt")
+            
+            # Count items for summary
+            total_items = sum(len(values) if isinstance(values, list) else (1 if values else 0) for values in self_memories.values())
+            categories_with_data = len([k for k, v in self_memories.items() if v])
+            
+            await interaction.followup.send(
+                f"📁 Exported {total_items} self-memories across {categories_with_data} categories.",
+                file=file
+            )
+            
+        except Exception as e:
+            print(f"Error exporting self memories: {e}")
+            await interaction.followup.send("❌ An error occurred while exporting memories.")
+
     # ==================== SLASH COMMANDS ====================
     
     @app_commands.command(name="memory_view", description="View memories about a user")

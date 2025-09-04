@@ -476,6 +476,122 @@ class UtilityCog(commands.Cog, name="Utility"):
                 
             await interaction.response.send_message(embed=embed, ephemeral=True)
 
+    @app_commands.command(name="shutdown", description="Shutdown the bot (Owner only)")
+    async def shutdown_slash(self, interaction: discord.Interaction):
+        """Shutdown the bot (Owner only)"""
+        if interaction.user.id != self.bot.owner_id:
+            await interaction.response.send_message("❌ Only the bot owner can use this command.", ephemeral=True)
+            return
+            
+        embed = discord.Embed(
+            title="🛑 Bot Shutdown", 
+            description="Saving data and shutting down...", 
+            color=discord.Color.red()
+        )
+        await interaction.response.send_message(embed=embed)
+        
+        # Save data before shutdown
+        await self.bot.save_immediately()
+        
+        # Close the bot
+        await self.bot.close()
+
+    @app_commands.command(name="save", description="Manually save all data (Admin only)")
+    async def save_slash(self, interaction: discord.Interaction):
+        """Manually save all data (Admin only)"""
+        if not interaction.user.guild_permissions.administrator:
+            await interaction.response.send_message("❌ This command requires administrator permissions.", ephemeral=True)
+            return
+            
+        try:
+            await self.bot.save_immediately()
+            embed = discord.Embed(
+                title="💾 Data Saved", 
+                description="All data has been saved to JSON files.", 
+                color=discord.Color.green()
+            )
+        except Exception as e:
+            embed = discord.Embed(
+                title="❌ Save Error", 
+                description=f"Error saving data: {e}", 
+                color=discord.Color.red()
+            )
+        
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+
+    @app_commands.command(name="restart", description="Restart the bot (Owner only)")
+    async def restart_slash(self, interaction: discord.Interaction):
+        """Restart the bot (Owner only)"""
+        if interaction.user.id != self.bot.owner_id:
+            await interaction.response.send_message("❌ Only the bot owner can use this command.", ephemeral=True)
+            return
+            
+        embed = discord.Embed(
+            title="🔄 Bot Restart", 
+            description="Saving data and restarting...", 
+            color=discord.Color.orange()
+        )
+        await interaction.response.send_message(embed=embed)
+        
+        # Save data before restart
+        await self.bot.save_immediately()
+        
+        # Use subprocess to preserve signal handling
+        import subprocess
+        import asyncio
+        
+        async def delayed_restart():
+            await asyncio.sleep(0.5)  # Give time for message to send
+            subprocess.Popen([sys.executable] + sys.argv)
+            await self.bot.close()
+            import os
+            os._exit(0)
+        
+        # Schedule restart without blocking
+        asyncio.create_task(delayed_restart())
+
+    @app_commands.command(name="proactive", description="Manually trigger a proactive message from Izumi (Admin only)")
+    async def proactive_slash(self, interaction: discord.Interaction):
+        """Manually trigger a proactive message from Izumi (admin only)"""
+        if not interaction.user.guild_permissions.administrator:
+            await interaction.response.send_message("❌ This command requires administrator permissions.", ephemeral=True)
+            return
+            
+        # Access unified memory system directly from bot
+        if not hasattr(self.bot, 'unified_memory'):
+            await interaction.response.send_message("❌ Unified memory system not available", ephemeral=True)
+            return
+            
+        try:
+            result = await self.bot.unified_memory.send_unprompted_message(self.bot, channel_id=interaction.channel.id)
+            if result:
+                await interaction.response.send_message("✅ Triggered proactive message!", ephemeral=True)
+            else:
+                await interaction.response.send_message("ℹ️ No proactive message was appropriate right now", ephemeral=True)
+        except Exception as e:
+            await interaction.response.send_message(f"❌ Error: {e}", ephemeral=True)
+
+    @app_commands.command(name="birthday_ping", description="Manually test the birthday ping system (Admin only)")
+    async def birthday_ping_slash(self, interaction: discord.Interaction):
+        """Manually test the birthday ping system (admin only)"""
+        if not interaction.user.guild_permissions.administrator:
+            await interaction.response.send_message("❌ This command requires administrator permissions.", ephemeral=True)
+            return
+            
+        unified_memory = self.bot.get_cog('UnifiedMemory')
+        if not unified_memory:
+            await interaction.response.send_message("❌ Unified memory system not available", ephemeral=True)
+            return
+            
+        try:
+            result = await unified_memory.send_random_birthday_ping(self.bot)
+            if result:
+                await interaction.response.send_message(f"✅ Birthday ping sent: {result}", ephemeral=True)
+            else:
+                await interaction.response.send_message("ℹ️ No birthday users found or cooldown active", ephemeral=True)
+        except Exception as e:
+            await interaction.response.send_message(f"❌ Error: {e}", ephemeral=True)
+
     # Prefix command versions
     @commands.command(name="help", aliases=["h", "commands", "cmd", "cmds"])
     async def help_prefix(self, ctx: commands.Context, *, command_name: str = None):

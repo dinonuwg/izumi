@@ -34,6 +34,9 @@ class IzumiAI(commands.Cog):
         # Track Izumi's conversation participation
         self.participation_tracker = {}  # {channel_id: {"last_participation": timestamp, "is_active": bool}}
         
+        # Track recent responses to prevent duplicates
+        self.recent_responses = {}  # {user_id: timestamp} - Track last response time per user
+        
         # API optimization features
         self.response_cache = {}  # Simple response caching
         self.daily_api_calls = 0
@@ -228,6 +231,7 @@ class IzumiAI(commands.Cog):
         
         # Handle AI responses when mentioned
         if self.bot.user in message.mentions:
+            print(f"🤖 {message.author.display_name} mentioned Izumi: {message.content[:100]}...")
             await self._handle_ai_response(message)
         else:
             # Check if someone mentioned "izumi" and she recently participated
@@ -554,6 +558,19 @@ class IzumiAI(commands.Cog):
         if not self.gemini_model:
             return
         
+        # Check if we recently responded to this user (prevent spam responses)
+        user_id = message.author.id
+        current_time = time.time()
+        
+        if user_id in self.recent_responses:
+            time_since_last_response = current_time - self.recent_responses[user_id]
+            if time_since_last_response < 15:  # Minimum 15 seconds between responses to same user
+                print(f"⏳ Skipping response to {message.author.display_name} - responded {time_since_last_response:.1f}s ago")
+                return
+        
+        # Mark that we're about to respond to this user
+        self.recent_responses[user_id] = current_time
+        
         # Wait 5 seconds to collect any follow-up messages from the same user
         await asyncio.sleep(5)
         
@@ -659,14 +676,24 @@ class IzumiAI(commands.Cog):
             await message.reply("sorry, having technical issues rn", mention_author=False)
 
     async def _collect_recent_user_messages(self, original_message: discord.Message) -> list:
-        """Collect recent messages from the same user within 10 seconds"""
+        """Collect recent messages from the same user within 10 seconds (before AND after the original)"""
         messages = [original_message]
         
         try:
-            # Get messages from the channel history
+            # Get messages AFTER the original message (sent during the 5-second wait)
             async for msg in original_message.channel.history(limit=10, after=original_message.created_at):
                 # Only collect messages from the same user within 10 seconds
                 time_diff = (msg.created_at - original_message.created_at).total_seconds()
+                if msg.author == original_message.author and time_diff <= 10:
+                    messages.append(msg)
+                elif time_diff > 10:
+                    break
+            
+            # Also get messages BEFORE the original message (in case they sent multiple quickly)
+            before_time = original_message.created_at
+            async for msg in original_message.channel.history(limit=10, before=original_message.created_at):
+                # Only collect messages from the same user within 10 seconds before
+                time_diff = (original_message.created_at - msg.created_at).total_seconds()
                 if msg.author == original_message.author and time_diff <= 10:
                     messages.append(msg)
                 elif time_diff > 10:
@@ -677,6 +704,7 @@ class IzumiAI(commands.Cog):
         
         # Sort by timestamp to maintain order
         messages.sort(key=lambda m: m.created_at)
+        print(f"📥 Collected {len(messages)} messages from {original_message.author.display_name}")
         return messages
 
     def _combine_user_messages(self, messages: list) -> str:

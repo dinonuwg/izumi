@@ -94,6 +94,13 @@ class OsuGachaCommandsCog(commands.Cog, name="Osu Gacha Commands"):
     async def osu_toggle_slash(self, interaction: discord.Interaction):
         await self.handlers.handle_toggle_confirmations(interaction)
 
+    @app_commands.command(name="owipe", description="[OWNER] Wipe a user's gacha data completely")
+    @app_commands.describe(target="User whose gacha data to wipe completely (Owner only)")
+    @app_commands.default_permissions(administrator=True)
+    async def owipe_slash(self, interaction: discord.Interaction, target: discord.Member = None):
+        """Wipe a user's gacha data completely (Owner only)"""
+        await self.handlers.handle_wipe_command(interaction, target)
+
     # PREFIX COMMANDS
     @commands.command(name="osutoggle", aliases=["otoggle", "toggle"])
     async def osu_toggle_prefix(self, ctx: commands.Context):
