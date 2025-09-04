@@ -412,6 +412,27 @@ class MinimalBot(commands.Bot):
                 pass  # silently fail if we can't send
             return
         elif isinstance(error, commands.MissingRequiredArgument):
+            # Try to show command help if available
+            try:
+                from utils.helpers import show_command_usage
+                
+                # Check if command has custom help data
+                if hasattr(ctx.command, 'callback') and hasattr(ctx.command.callback, '__self__'):
+                    cog = ctx.command.callback.__self__
+                    if hasattr(cog, f"{ctx.command.name}_help_data"):
+                        help_data = getattr(cog, f"{ctx.command.name}_help_data")
+                        await show_command_usage(ctx, ctx.command.name, help_data)
+                        return
+                
+                # For group commands like memory, show the help
+                if isinstance(ctx.command, commands.Group):
+                    # Trigger the help for the group
+                    await ctx.invoke(ctx.command)
+                    return
+                    
+            except Exception:
+                pass  # Fall back to default message
+            
             await ctx.send(f"missing argument: {error.param.name}. check command usage.")
         elif isinstance(error, commands.BadArgument):
             await ctx.send(f"invalid argument. check command usage.")
