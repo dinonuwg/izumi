@@ -1134,13 +1134,63 @@ class OsuGachaSystem:
             return None
         
     def _get_cached_font(self, font_name, size):
-        """Get cached font to avoid repeated loading"""
+        """Get cached font to avoid repeated loading with cross-platform support"""
         cache_key = f"{font_name}_{size}"
         if cache_key not in self._font_cache:
-            try:
-                self._font_cache[cache_key] = ImageFont.truetype(font_name, size)
-            except:
-                self._font_cache[cache_key] = ImageFont.load_default()
+            # Try multiple font options for cross-platform compatibility
+            font_options = []
+            
+            # Map Windows fonts to cross-platform alternatives
+            if font_name == "arialbd.ttf":  # Arial Bold
+                if os.name == 'nt':  # Windows
+                    font_options = [
+                        "arialbd.ttf",
+                        "arial-bold.ttf",
+                        "C:/Windows/Fonts/arialbd.ttf",
+                    ]
+                else:  # Linux/Unix
+                    font_options = [
+                        "DejaVuSans-Bold.ttf",
+                        "LiberationSans-Bold.ttf",
+                        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+                        "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
+                        "/System/Library/Fonts/Arial Bold.ttf",  # macOS
+                    ]
+            elif font_name == "arial.ttf":  # Arial Regular
+                if os.name == 'nt':  # Windows
+                    font_options = [
+                        "arial.ttf",
+                        "C:/Windows/Fonts/arial.ttf",
+                    ]
+                else:  # Linux/Unix
+                    font_options = [
+                        "DejaVuSans.ttf",
+                        "LiberationSans-Regular.ttf", 
+                        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+                        "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
+                        "/System/Library/Fonts/Arial.ttf",  # macOS
+                    ]
+            else:
+                font_options = [font_name]
+            
+            # Try each font option until one works
+            font_loaded = False
+            for font_option in font_options:
+                try:
+                    self._font_cache[cache_key] = ImageFont.truetype(font_option, size)
+                    font_loaded = True
+                    break
+                except:
+                    continue
+            
+            # Fall back to default if no fonts work, but with a reasonable size
+            if not font_loaded:
+                try:
+                    # Try to get a default font that's closer to the requested size
+                    self._font_cache[cache_key] = ImageFont.load_default().font_variant(size=size)
+                except:
+                    self._font_cache[cache_key] = ImageFont.load_default()
+                    
         return self._font_cache[cache_key]
 
     async def create_card_image(self, player_data, stars, mutation=None, card_price=0, flashback_year=None):
