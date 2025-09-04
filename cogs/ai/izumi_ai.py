@@ -34,12 +34,139 @@ class IzumiAI(commands.Cog):
         # Track Izumi's conversation participation
         self.participation_tracker = {}  # {channel_id: {"last_participation": timestamp, "is_active": bool}}
         
+        # API optimization features
+        self.response_cache = {}  # Simple response caching
+        self.daily_api_calls = 0
+        self.last_cache_clear = time.time()
+        
+        # Python-based response patterns to reduce API calls
+        self.quick_responses = self._init_quick_responses()
+        
         # Setup Gemini
         self._setup_gemini()
         
         # Start background tasks
         self.save_learning_data_task.start()
         self.cleanup_learning_data_task.start()
+    
+    def _init_quick_responses(self):
+        """Initialize Python-based quick responses to reduce API calls"""
+        return {
+            # Greetings (exact matches, case insensitive)
+            'greetings': {
+                'patterns': ['hi', 'hello', 'hey', 'sup', 'yo', 'hiya', 'heya'],
+                'responses': [
+                    'hey there!',
+                    'hiya~',
+                    'hello! ✨',
+                    'hey hey!',
+                    'hi! how\'s it going?',
+                    'heyyy',
+                    'wassup!',
+                    'oh hai there'
+                ]
+            },
+            
+            # Simple questions
+            'how_are_you': {
+                'patterns': ['how are you', 'how r u', 'how are u', 'how you doing', 'how ya doing'],
+                'responses': [
+                    'doing great! thanks for asking ^^',
+                    'pretty good! just vibing~',
+                    'i\'m doing well! how about you?',
+                    'all good here! what about you?',
+                    'doing amazing! hope you are too',
+                    'pretty chill today, thanks!',
+                    'good! just hanging out in here'
+                ]
+            },
+            
+            # Thanks
+            'thanks': {
+                'patterns': ['thanks', 'thank you', 'thx', 'ty', 'tysm', 'thank u'],
+                'responses': [
+                    'you\'re welcome!',
+                    'no problem!',
+                    'anytime! ^^',
+                    'happy to help!',
+                    'of course!',
+                    'np!',
+                    'always here to help~'
+                ]
+            },
+            
+            # Simple affirmations
+            'yes_no': {
+                'patterns': ['yes', 'yeah', 'yep', 'yup', 'no', 'nope', 'nah'],
+                'responses': [
+                    'gotcha!',
+                    'alright!',
+                    'okay!',
+                    'sounds good',
+                    'cool cool',
+                    'fair enough',
+                    'makes sense'
+                ]
+            },
+            
+            # Good night/morning
+            'time_greetings': {
+                'patterns': ['good morning', 'good night', 'goodnight', 'gn', 'gm', 'good evening'],
+                'responses': [
+                    'good morning!',
+                    'good night! sleep well~',
+                    'sweet dreams!',
+                    'have a great day!',
+                    'good evening!',
+                    'night night!',
+                    'morning! hope you have a good day'
+                ]
+            },
+            
+            # Laughter responses
+            'laughter': {
+                'patterns': ['lol', 'lmao', 'haha', 'lmfao', 'rofl', 'xd'],
+                'responses': [
+                    'hehe',
+                    'ikr!',
+                    'lmao',
+                    'haha nice',
+                    'that\'s funny',
+                    'lol',
+                    '😄'
+                ]
+            }
+        }
+
+    def _check_quick_response(self, message_content: str) -> str:
+        """Check if we can use a quick Python response instead of API call"""
+        content_lower = message_content.lower().strip()
+        
+        # Remove common punctuation for matching
+        content_clean = content_lower.replace('!', '').replace('?', '').replace('.', '').replace(',', '')
+        
+        for category, data in self.quick_responses.items():
+            for pattern in data['patterns']:
+                if pattern == content_clean or (len(content_clean.split()) <= 3 and pattern in content_clean):
+                    # Use mood to influence response selection
+                    try:
+                        mood_data = self.bot.unified_memory.get_daily_mood()
+                        current_mood = mood_data['current_mood']
+                        
+                        # Filter responses based on mood
+                        responses = data['responses']
+                        if current_mood == 'sleepy':
+                            # Prefer shorter, more casual responses when sleepy
+                            responses = [r for r in responses if len(r) < 15] or responses
+                        elif current_mood == 'excited':
+                            # Prefer more energetic responses when excited
+                            responses = [r for r in responses if '!' in r or '~' in r] or responses
+                        
+                        return random.choice(responses)
+                    except:
+                        return random.choice(data['responses'])
+        
+        return None
     
     def _setup_gemini(self):
         """Initialize Gemini AI model"""
@@ -145,7 +272,7 @@ class IzumiAI(commands.Cog):
                         
                         # Brief pause between multiple messages (if more than one part)
                         if len(message_parts) > 1 and i < len(message_parts) - 1:
-                            await asyncio.sleep(random.uniform(0.5, 1.5))
+                            await asyncio.sleep(random.uniform(2.0, 3.0))
                     
                     print(f"✅ Successfully joined conversation: {response_text[:50]}...")
                     
@@ -289,7 +416,7 @@ class IzumiAI(commands.Cog):
                     
                     # Brief pause between multiple messages (if more than one part)
                     if len(message_parts) > 1 and i < len(message_parts) - 1:
-                        await asyncio.sleep(random.uniform(0.5, 1.5))
+                        await asyncio.sleep(random.uniform(2.0, 3.0))
                 
                 print(f"✅ Continued conversation: {response_text[:50]}...")
                 
@@ -392,6 +519,33 @@ class IzumiAI(commands.Cog):
             if not combined_prompt:
                 combined_prompt = "hello"
             
+            # Check for quick Python responses first (saves API calls)
+            quick_response = self._check_quick_response(combined_prompt)
+            if quick_response:
+                print(f"🚀 Using quick response (API saved): {quick_response}")
+                
+                # Split response if needed and send
+                message_parts = self._split_response_naturally(quick_response)
+                
+                for i, part in enumerate(message_parts):
+                    await self._type_with_delay(message.channel, part)
+                    
+                    if i == 0:
+                        await message.reply(part, mention_author=False)
+                    else:
+                        await message.channel.send(part)
+                    
+                    # Brief pause between multiple messages (if more than one part)
+                    if len(message_parts) > 1 and i < len(message_parts) - 1:
+                        await asyncio.sleep(random.uniform(2.0, 3.0))
+                
+                # Track participation
+                self.participation_tracker[message.channel.id] = {
+                    "last_participation": time.time(),
+                    "is_active": True
+                }
+                return
+            
             # Process mentions for AI context
             processed_prompt = self.bot.process_mentions_for_ai(combined_prompt, message.guild.id)
             
@@ -435,7 +589,7 @@ class IzumiAI(commands.Cog):
                 
                 # Brief pause between multiple messages (if more than one part)
                 if len(message_parts) > 1 and i < len(message_parts) - 1:
-                    await asyncio.sleep(random.uniform(0.5, 1.5))
+                    await asyncio.sleep(random.uniform(2.0, 3.0))
             
             # Track that Izumi is now participating in this conversation
             self.participation_tracker[message.channel.id] = {
@@ -484,19 +638,29 @@ class IzumiAI(commands.Cog):
         return ' '.join(combined_parts)
 
     def _split_response_naturally(self, response: str) -> list:
-        """Split response into natural message chunks for human-like conversation"""
+        """Split response into natural message chunks for human-like conversation with optimized thresholds"""
         import random
         
-        # Don't split if response is short (under 150 characters)
-        if len(response) < 150:
+        # Always keep very short messages as single (under 30 characters)
+        if len(response) < 30:
             return [response]
         
-        # Don't split if response is medium length (150-300 chars) most of the time
-        if 150 <= len(response) <= 300:
-            if random.random() < 0.8:  # 80% chance to keep as single message
+        # 30-50 characters: 25% chance to split
+        if 30 <= len(response) <= 50:
+            if random.random() > 0.25:  # 75% chance to keep as single message
                 return [response]
         
-        # For longer messages, try to split naturally
+        # 50-100 characters: 50% chance to split
+        elif 50 < len(response) <= 100:
+            if random.random() > 0.50:  # 50% chance to keep as single message
+                return [response]
+        
+        # 100-300 characters: 80% chance to split (same as before)
+        elif 100 < len(response) <= 300:
+            if random.random() < 0.2:  # 20% chance to keep as single message
+                return [response]
+        
+        # For longer messages, always try to split naturally
         parts = []
         
         # First, try splitting by sentences
@@ -695,6 +859,20 @@ class IzumiAI(commands.Cog):
     
     async def _generate_response_with_fallback(self, user_id: int, channel_id: int, prompt: str, original_message: str, username: str = None) -> Optional[str]:
         """Generate response with model fallback and error handling using shared channel context"""
+        
+        # Track API usage
+        self.daily_api_calls += 1
+        
+        # Clear cache daily to prevent memory buildup
+        current_time = time.time()
+        if current_time - self.last_cache_clear > 86400:  # 24 hours
+            self.response_cache.clear()
+            self.daily_api_calls = 0
+            self.last_cache_clear = current_time
+            print(f"🔄 Daily cache cleared. API calls reset.")
+        
+        print(f"📊 API Call #{self.daily_api_calls} of the day")
+        
         session_data = self._get_or_create_session(channel_id)
         
         # Get personality enhancements
