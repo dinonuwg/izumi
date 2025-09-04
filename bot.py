@@ -416,6 +416,32 @@ class MinimalBot(commands.Bot):
             try:
                 from utils.helpers import show_command_usage
                 
+                # Check if this is a subcommand of a group
+                if hasattr(ctx.command, 'parent') and ctx.command.parent:
+                    parent_command = ctx.command.parent
+                    subcommand_name = ctx.command.name
+                    
+                    # Special handling for memory command subcommands
+                    if parent_command.name == 'memory':
+                        help_messages = {
+                            'add': "**Usage:** `!memory add <user> <note>`\n**Example:** `!memory add @user likes cats`\n**Description:** Add a custom note about a user",
+                            'set': "**Usage:** `!memory set <user> <field> <value>`\n**Example:** `!memory set @user age 25`\n**Valid fields:** name, nickname, age, birthday, relationship_status, conversation_style",
+                            'trust': "**Usage:** `!memory trust <user> <level>`\n**Example:** `!memory trust @user 8`\n**Description:** Set trust level (-10 to 10)",
+                            'relate': "**Usage:** `!memory relate <user1> <user2> <relationship>`\n**Example:** `!memory relate @user1 @user2 friend`",
+                            'shared': "**Usage:** `!memory shared <user1> <user2> <experience>`\n**Example:** `!memory shared @user1 @user2 played games together`",
+                            'context': "**Usage:** `!memory context <user>`\n**Example:** `!memory context @user`\n**Description:** View user's social context",
+                            'clear': "**Usage:** `!memory clear <user>`\n**Example:** `!memory clear @user`\n**Description:** Clear all memories about a user",
+                            'forget': "**Usage:** `!memory forget <user>`\n**Example:** `!memory forget @user`\n**Description:** Make Izumi forget conversation history",
+                            'selfadd': "**Usage:** `!memory selfadd <category> <value>`\n**Example:** `!memory selfadd personality_traits friendly and helpful`\n**Categories:** personality_traits, likes, dislikes, backstory, goals, fears, hobbies, favorite_things, pet_peeves, life_philosophy, memories, relationships, skills, dreams, quirks, knowledge",
+                            'selfclear': "**Usage:** `!memory selfclear <category>`\n**Example:** `!memory selfclear personality_traits`",
+                            'knowledge': "**Usage:** `!memory knowledge <info>`\n**Example:** `!memory knowledge cats are amazing creatures`\n**Description:** Add general knowledge/information",
+                            'view': "**Usage:** `!memory view [user]`\n**Example:** `!memory view @user` or `!memory view` (for yourself)\n**Description:** View memories about a user"
+                        }
+                        
+                        if subcommand_name in help_messages:
+                            await ctx.send(f"🧠 **Memory Command Help**\n\n{help_messages[subcommand_name]}")
+                            return
+                
                 # Check if command has custom help data
                 if hasattr(ctx.command, 'callback') and hasattr(ctx.command.callback, '__self__'):
                     cog = ctx.command.callback.__self__
