@@ -744,107 +744,76 @@ class IzumiAI(commands.Cog):
         return '\n'.join(combined_parts)
 
     def _split_response_naturally(self, response: str) -> list:
-        """Split response into natural message chunks with length-based probabilities"""
+        """Split response into natural message chunks like casual typing (30-60 chars per message)"""
         import random
         
         # Debug logging
         print(f"🔧 Splitting response (length: {len(response)}): {response[:100]}...")
         
-        # Always keep very short messages as single (under 30 characters)
-        if len(response) < 30:
-            print(f"🔧 Keeping short message as single")
+        # Always keep very short messages as single (under 35 characters)
+        if len(response) < 35:
+            print(f"🔧 Keeping very short message as single")
             return [response]
         
-        # 30-50 characters: 25% chance to split
-        if 30 <= len(response) <= 50:
-            if random.random() > 0.25:  # 75% chance to keep as single message
-                print(f"🔧 Keeping 30-50 char message as single")
-                return [response]
+        # Split into casual typing chunks (30-60 characters each)
+        print(f"🔧 Splitting into casual typing chunks (30-60 chars each)...")
         
-        # 50-100 characters: 50% chance to split
-        elif 50 < len(response) <= 100:
-            if random.random() > 0.50:  # 50% chance to keep as single message
-                print(f"🔧 Keeping 50-100 char message as single")
-                return [response]
+        parts = []
+        remaining_text = response.strip()
         
-        # 100-120 characters: 75% chance to split
-        elif 100 < len(response) < 120:
-            if random.random() > 0.75:  # 25% chance to keep as single message
-                print(f"🔧 Keeping 100-120 char message as single (rare)")
-                return [response]
-        
-        # 120+ characters: Always split somewhere
-        print(f"🔧 Attempting to split message at punctuation...")
-        
-        # Split at natural punctuation marks in order of preference
-        split_points = ['! ', '? ', '. ', ', and ', ', but ', ', so ', '; ', ': ', ', ']
-        
-        for split_point in split_points:
-            if split_point in response:
-                parts = []
-                segments = response.split(split_point)
-                current_part = ""
-                
-                for i, segment in enumerate(segments):
-                    # Add the split point back (except for the last segment)
-                    if i < len(segments) - 1:
-                        segment += split_point.rstrip()
-                    
-                    # If adding this segment would make it too long, finalize current part
-                    if len(current_part + segment) > 200 and current_part:
-                        parts.append(current_part.strip())
-                        current_part = segment
-                    else:
-                        current_part += segment
-                
-                # Add the final part
-                if current_part:
-                    parts.append(current_part.strip())
-                
-                # Only use this split if it actually created multiple meaningful parts
-                if len(parts) > 1 and all(len(part.strip()) > 10 for part in parts):
-                    # Limit to maximum 3 parts
-                    if len(parts) > 3:
-                        # Merge excess parts into the third part
-                        merged_third = ' '.join(parts[2:])
-                        parts = parts[:2] + [merged_third]
-                    
-                    print(f"🔧 Successfully split at '{split_point}' into {len(parts)} parts")
-                    part_lengths = [len(part) for part in parts]
-                    print(f"🔧 Split result: {len(parts)} parts - {part_lengths}")
-                    return parts
-        
-        # If no good punctuation split point found but message is 120+, force split
-        if len(response) >= 120:
-            print(f"🔧 Force splitting long message at word boundaries...")
-            words = response.split(' ')
-            parts = []
-            current_part = ""
+        while remaining_text:
+            # Random target length between 30-60 characters
+            target_length = random.randint(30, 60)
             
-            for word in words:
-                if len(current_part + ' ' + word) > 200 and current_part:
-                    parts.append(current_part.strip())
-                    current_part = word
-                else:
-                    current_part += (' ' + word if current_part else word)
+            # If remaining text is short enough, just use it all
+            if len(remaining_text) <= target_length + 15:  # +15 to avoid tiny leftover chunks
+                parts.append(remaining_text.strip())
+                break
             
+            # Find the best split point within our target range
+            # Prefer splitting at natural points: punctuation, then spaces
+            split_points = ['! ', '? ', '. ', ', ', '; ', ': ', ' and ', ' but ', ' so ', ' - ']
+            best_split = None
+            best_distance = float('inf')
+            
+            # Look for punctuation split points first
+            for split_point in split_points:
+                idx = remaining_text.find(split_point, 20)  # Start looking after 20 chars
+                if idx != -1 and 25 <= idx + len(split_point) <= 65:  # Within reasonable range
+                    distance = abs(idx + len(split_point) - target_length)
+                    if distance < best_distance:
+                        best_distance = distance
+                        best_split = idx + len(split_point)
+            
+            # If no good punctuation split, find the best space
+            if best_split is None:
+                # Look for spaces around our target length
+                for i in range(max(25, target_length - 15), min(len(remaining_text), target_length + 15)):
+                    if remaining_text[i] == ' ':
+                        distance = abs(i - target_length)
+                        if distance < best_distance:
+                            best_distance = distance
+                            best_split = i + 1  # Split after the space
+            
+            # If still no good split point, just split at target length
+            if best_split is None:
+                best_split = min(target_length, len(remaining_text))
+            
+            # Extract this part and continue with the rest
+            current_part = remaining_text[:best_split].strip()
             if current_part:
-                parts.append(current_part.strip())
+                parts.append(current_part)
             
-            # Limit to maximum 3 parts
-            if len(parts) > 3:
-                merged_third = ' '.join(parts[2:])
-                parts = parts[:2] + [merged_third]
-            
-            if len(parts) > 1:
-                print(f"🔧 Force split by words into {len(parts)} parts")
-                part_lengths = [len(part) for part in parts]
-                print(f"🔧 Split result: {len(parts)} parts - {part_lengths}")
-                return parts
+            remaining_text = remaining_text[best_split:].strip()
         
-        # If no good split point found, return as single message
-        print(f"🔧 No good split point found, keeping as single message")
-        return [response]
+        # Remove any empty parts
+        parts = [part for part in parts if part.strip()]
+        
+        print(f"🔧 Successfully split into {len(parts)} casual chunks")
+        part_lengths = [len(part) for part in parts]
+        print(f"🔧 Split result: {len(parts)} parts - {part_lengths}")
+        
+        return parts if parts else [response]
 
     async def _send_response_parts(self, message: discord.Message, response_parts: list, typing_delay: bool = True):
         """Send multiple response parts with human-like delays"""
