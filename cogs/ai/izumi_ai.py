@@ -728,16 +728,36 @@ class IzumiAI(commands.Cog):
         return '\n'.join(combined_parts)
 
     def _split_response_naturally(self, response: str) -> list:
-        """Split response into natural message chunks using punctuation"""
+        """Split response into natural message chunks with length-based probabilities"""
+        import random
+        
         # Debug logging
         print(f"🔧 Splitting response (length: {len(response)}): {response[:100]}...")
         
-        # Don't split short messages (under 120 characters)
-        if len(response) < 120:
+        # Always keep very short messages as single (under 30 characters)
+        if len(response) < 30:
             print(f"🔧 Keeping short message as single")
             return [response]
         
-        # For longer messages, split at natural punctuation points
+        # 30-50 characters: 25% chance to split
+        if 30 <= len(response) <= 50:
+            if random.random() > 0.25:  # 75% chance to keep as single message
+                print(f"🔧 Keeping 30-50 char message as single")
+                return [response]
+        
+        # 50-100 characters: 50% chance to split
+        elif 50 < len(response) <= 100:
+            if random.random() > 0.50:  # 50% chance to keep as single message
+                print(f"🔧 Keeping 50-100 char message as single")
+                return [response]
+        
+        # 100-120 characters: 75% chance to split
+        elif 100 < len(response) < 120:
+            if random.random() > 0.75:  # 25% chance to keep as single message
+                print(f"🔧 Keeping 100-120 char message as single (rare)")
+                return [response]
+        
+        # 120+ characters: Always split somewhere
         print(f"🔧 Attempting to split message at punctuation...")
         
         # Split at natural punctuation marks in order of preference
@@ -755,7 +775,7 @@ class IzumiAI(commands.Cog):
                         segment += split_point.rstrip()
                     
                     # If adding this segment would make it too long, finalize current part
-                    if len(current_part + segment) > 300 and current_part:
+                    if len(current_part + segment) > 200 and current_part:
                         parts.append(current_part.strip())
                         current_part = segment
                     else:
@@ -767,10 +787,44 @@ class IzumiAI(commands.Cog):
                 
                 # Only use this split if it actually created multiple meaningful parts
                 if len(parts) > 1 and all(len(part.strip()) > 10 for part in parts):
+                    # Limit to maximum 3 parts
+                    if len(parts) > 3:
+                        # Merge excess parts into the third part
+                        merged_third = ' '.join(parts[2:])
+                        parts = parts[:2] + [merged_third]
+                    
                     print(f"🔧 Successfully split at '{split_point}' into {len(parts)} parts")
                     part_lengths = [len(part) for part in parts]
                     print(f"🔧 Split result: {len(parts)} parts - {part_lengths}")
                     return parts
+        
+        # If no good punctuation split point found but message is 120+, force split
+        if len(response) >= 120:
+            print(f"🔧 Force splitting long message at word boundaries...")
+            words = response.split(' ')
+            parts = []
+            current_part = ""
+            
+            for word in words:
+                if len(current_part + ' ' + word) > 200 and current_part:
+                    parts.append(current_part.strip())
+                    current_part = word
+                else:
+                    current_part += (' ' + word if current_part else word)
+            
+            if current_part:
+                parts.append(current_part.strip())
+            
+            # Limit to maximum 3 parts
+            if len(parts) > 3:
+                merged_third = ' '.join(parts[2:])
+                parts = parts[:2] + [merged_third]
+            
+            if len(parts) > 1:
+                print(f"🔧 Force split by words into {len(parts)} parts")
+                part_lengths = [len(part) for part in parts]
+                print(f"🔧 Split result: {len(parts)} parts - {part_lengths}")
+                return parts
         
         # If no good split point found, return as single message
         print(f"🔧 No good split point found, keeping as single message")
