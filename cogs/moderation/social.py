@@ -158,7 +158,16 @@ class SocialCog(commands.Cog, name="Social"):
     async def kiss_prefix(self, ctx: commands.Context, member: discord.Member = None):
         """Kiss someone! 💋"""
         if member is None:
-            await ctx.send(f"You need to mention someone to kiss! Usage: `{COMMAND_PREFIX}kiss @user`")
+            from utils.helpers import show_command_usage
+            await show_command_usage(
+                ctx, "kiss",
+                description="Give someone a kiss! 💋",
+                usage_examples=[
+                    f"{COMMAND_PREFIX}kiss @user",
+                    f"{COMMAND_PREFIX}smooch @friend"
+                ],
+                notes=["Can't kiss bots or yourself", "Sends a cute anime GIF with the action"]
+            )
             return
         
         if member.bot:
@@ -184,7 +193,17 @@ class SocialCog(commands.Cog, name="Social"):
     async def hug_prefix(self, ctx: commands.Context, member: discord.Member = None):
         """Give someone a warm hug! 🤗"""
         if member is None:
-            await ctx.send(f"You need to mention someone to hug! Usage: `{COMMAND_PREFIX}hug @user`")
+            from utils.helpers import show_command_usage
+            await show_command_usage(
+                ctx, "hug",
+                description="Give someone a warm hug! 🤗",
+                usage_examples=[
+                    f"{COMMAND_PREFIX}hug @user",
+                    f"{COMMAND_PREFIX}cuddle @friend",
+                    f"{COMMAND_PREFIX}hug {ctx.author.mention}  # Self-hug allowed!"
+                ],
+                notes=["Bots don't need hugs", "Self-hugs are allowed for self-love", "Sends a cute anime GIF"]
+            )
             return
         
         if member.bot:
@@ -212,7 +231,16 @@ class SocialCog(commands.Cog, name="Social"):
     async def slap_prefix(self, ctx: commands.Context, member: discord.Member = None):
         """Slap someone! ✋"""
         if member is None:
-            await ctx.send(f"You need to mention someone to slap! Usage: `{COMMAND_PREFIX}slap @user`")
+            from utils.helpers import show_command_usage
+            await show_command_usage(
+                ctx, "slap",
+                description="Slap someone! ✋",
+                usage_examples=[
+                    f"{COMMAND_PREFIX}slap @user",
+                    f"{COMMAND_PREFIX}smack @annoying_friend"
+                ],
+                notes=["Can't slap bots or yourself", "Sends a dramatic anime slap GIF"]
+            )
             return
         
         if member.bot:
@@ -238,7 +266,18 @@ class SocialCog(commands.Cog, name="Social"):
     async def sex_prefix(self, ctx: commands.Context, member: discord.Member = None):
         """Hold hands with someone! 😳👫"""
         if member is None:
-            await ctx.send(f"You need to mention someone to hold hands with! Usage: `{COMMAND_PREFIX}sex @user`")
+            from utils.helpers import show_command_usage
+            await show_command_usage(
+                ctx, "sex",
+                description="Hold hands with someone! 😳👫 (How lewd!)",
+                usage_examples=[
+                    f"{COMMAND_PREFIX}sex @user",
+                    f"{COMMAND_PREFIX}handhold @crush",
+                    f"{COMMAND_PREFIX}lewd @someone"
+                ],
+                notes=["Can't hold hands with bots or yourself", "Very lewd content!", "Sends a romantic anime GIF"]
+            )
+            return
             return
         
         if member.bot:

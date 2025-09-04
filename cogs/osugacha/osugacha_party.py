@@ -1192,20 +1192,26 @@ class OsuPartyGamesCog(commands.Cog, name="Osu Party Games"):
             return
         
         if game_type.lower() not in ["bg", "background"]:
-            embed = discord.Embed(
-                title="Party Games",
-                description="Start a party background guesser game!\n\n"
-                        "**Usage:**\n"
-                        "`!op bg` - Infinite background guesser\n"
-                        "`!op bg 10` - 10 maps background guesser\n"
-                        "`!op bg stop` - Stop current game\n\n"
-                        "**How to Play:**\n"
-                        "Type song titles or artists in chat to guess!\n"
-                        "+1 point per correct guess\n"
-                        "Game auto-ends after 1 minute of no activity",
-                color=discord.Color.blue()
+            from utils.helpers import show_command_usage
+            await show_command_usage(
+                ctx, "osuparty",
+                description="Start a party background guesser game! 🎵",
+                usage_examples=[
+                    f"{COMMAND_PREFIX}op bg",
+                    f"{COMMAND_PREFIX}party bg 10",
+                    f"{COMMAND_PREFIX}op bg stop"
+                ],
+                subcommands={
+                    "bg/background": "Background guesser game",
+                    "stop/s": "Stop current game"
+                },
+                notes=[
+                    "Type song titles or artists in chat to guess",
+                    "+1 point per correct guess",
+                    "Game auto-ends after 1 minute of no activity",
+                    "Use numbers to limit maps (e.g., 'bg 10')"
+                ]
             )
-            await ctx.send(embed=embed)
             return
         
         # Convert maps_or_action to int if it's a number

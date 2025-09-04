@@ -716,7 +716,18 @@ class ModerationCog(commands.Cog, name="Moderation"):
     @commands.has_permissions(manage_messages=True)
     async def warn_prefix(self, ctx: commands.Context, member: discord.Member = None, *, reason: str = "No reason provided"):
         if member is None:
-            await ctx.send("Please specify a member to warn. Usage: `!warn @user [reason]`")
+            from utils.helpers import show_command_usage
+            command_data = {
+                'description': '⚠️ Issue a warning to a server member',
+                'usage_examples': [
+                    {'usage': '!warn @user', 'description': 'Warn user with default reason'},
+                    {'usage': '!warn @user spamming messages', 'description': 'Warn user with custom reason'},
+                    {'usage': '!warning @user being disruptive', 'description': 'Using alias with reason'},
+                    {'usage': '!w @user', 'description': 'Quick warn (short alias)'}
+                ],
+                'notes': '🔒 Requires Manage Messages permission\n📝 Warnings are permanently logged\n👀 Use `!warnings @user` to view user\'s warning history'
+            }
+            await show_command_usage(ctx, "warn", command_data)
             return
             
         if member.bot:
@@ -751,7 +762,22 @@ class ModerationCog(commands.Cog, name="Moderation"):
     @commands.bot_has_permissions(moderate_members=True)
     async def mute_prefix(self, ctx: commands.Context, member: discord.Member = None, duration: str = "5m", *, reason: str = "No reason provided"):
         if member is None:
-            await ctx.send("Please specify a member to mute. Usage: `!mute @user [duration] [reason]`")
+            from utils.helpers import show_command_usage
+            command_data = {
+                'description': '🔇 Temporarily mute a server member',
+                'usage_examples': [
+                    {'usage': '!mute @user', 'description': 'Mute for 5 minutes (default)'},
+                    {'usage': '!mute @user 1h', 'description': 'Mute for 1 hour'},
+                    {'usage': '!mute @user 30m spamming', 'description': 'Mute for 30 minutes with reason'},
+                    {'usage': '!timeout @user 2h being disruptive', 'description': 'Using alias with custom duration'}
+                ],
+                'subcommands': {
+                    'Duration formats': 's (seconds), m (minutes), h (hours), d (days)',
+                    'Examples': '30s, 5m, 2h, 1d'
+                },
+                'notes': '🔒 Requires Moderate Members permission\n⏰ Default duration is 5 minutes if not specified\n🚫 Cannot mute bots, yourself, or higher roles'
+            }
+            await show_command_usage(ctx, "mute", command_data)
             return
             
         if member.bot:

@@ -15,16 +15,8 @@ class OsuGachaCommandsCog(commands.Cog, name="Osu Gacha Commands"):
         self.handlers = OsuGachaHandlers(bot)
 
     # SLASH COMMANDS
-    @app_commands.command(name="osugive", description="[ADMIN] Give coins or cards to players")
-    @app_commands.describe(
-        target="Player to give items to",
-        amount_or_player="Coin amount (number) or player name for card",
-        mutation="Optional mutation for card (ignored for coins)"
-    )
-    async def osu_give_slash(self, interaction: discord.Interaction, target: discord.Member, amount_or_player: str, mutation: str = None):
-        """Admin slash command for giving items"""
-        await self.handlers.handle_give_command(interaction, target, amount_or_player, mutation, interaction)
-
+    # Removed osugive slash command - use !osugive prefix command instead
+    
     @app_commands.command(name="osuhelp", description="Complete guide to the osu! gacha system")
     async def osu_help_slash(self, interaction: discord.Interaction):
         await self.handlers.handle_help_command(interaction, interaction)
@@ -56,14 +48,7 @@ class OsuGachaCommandsCog(commands.Cog, name="Osu Gacha Commands"):
     async def osu_balance_slash(self, interaction: discord.Interaction):
         await self.handlers.handle_balance_command(interaction, interaction)
 
-    @app_commands.command(name="osusimulate", description="[ADMIN] Simulate opening crates")
-    @app_commands.describe(
-        crate_type="Type of crate to simulate",
-        amount="Number of crates to simulate (1-100)"
-    )
-    @app_commands.default_permissions(administrator=True)
-    async def osu_simulate_slash(self, interaction: discord.Interaction, crate_type: str, amount: int = 10):
-        await self.handlers.handle_simulate_command(interaction, crate_type, amount, interaction)
+    # Removed osusimulate slash command - use !osusimulate prefix command instead
 
     @app_commands.command(name="osucrates", description="View available crates and their contents")
     async def osu_crates_slash(self, interaction: discord.Interaction):
@@ -110,14 +95,18 @@ class OsuGachaCommandsCog(commands.Cog, name="Osu Gacha Commands"):
     async def osu_give_prefix(self, ctx: commands.Context, target: discord.Member = None, amount_or_player: str = None, *, mutation: str = None):
         """Admin-only command to give coins or cards to players"""
         if not target or not amount_or_player:
-            embed = discord.Embed(
-                title="Usage",
-                description="**Give Coins:** `!ogive @user 1000`\n"
-                        "**Give Card:** `!ogive @user mrekk` (random mutation)\n"
-                        "**Give Card with Mutation:** `!ogive @user mrekk immortal`",
-                color=discord.Color.blue()
-            )
-            await ctx.send(embed=embed)
+            from utils.helpers import show_command_usage
+            command_data = {
+                'description': 'Give coins or cards to players (Admin only)',
+                'usage_examples': [
+                    {'usage': '!osugive @user 1000', 'description': 'Give 1000 coins to user'},
+                    {'usage': '!osugive @user mrekk', 'description': 'Give a random mrekk card'},
+                    {'usage': '!osugive @user mrekk immortal', 'description': 'Give immortal mrekk card'},
+                    {'usage': '!osugive @user WhiteCat golden', 'description': 'Give golden WhiteCat card'}
+                ],
+                'notes': '⚠️ Admin only command. Player names are case-sensitive!'
+            }
+            await show_command_usage(ctx, "osugive", command_data)
             return
         
         await self.handlers.handle_give_command(ctx, target, amount_or_player, mutation)
@@ -160,7 +149,18 @@ class OsuGachaCommandsCog(commands.Cog, name="Osu Gacha Commands"):
     @commands.has_permissions(administrator=True)
     async def osu_simulate_prefix(self, ctx: commands.Context, crate_type: str = None, amount: int = 10):
         if not crate_type:
-            await self.handlers.show_crate_help(ctx)
+            from utils.helpers import show_command_usage
+            command_data = {
+                'description': 'Simulate opening crates to see potential rewards (Admin only)',
+                'usage_examples': [
+                    {'usage': '!osusimulate basic', 'description': 'Simulate 10 basic crates'},
+                    {'usage': '!osusimulate premium 5', 'description': 'Simulate 5 premium crates'},
+                    {'usage': '!osusimulate legendary 1', 'description': 'Simulate 1 legendary crate'},
+                    {'usage': '!osusimulate ultra 3', 'description': 'Simulate 3 ultra crates'}
+                ],
+                'notes': '⚠️ Admin only command. Use `!osucrates` to see all available crate types.'
+            }
+            await show_command_usage(ctx, "osusimulate", command_data)
             return
         await self.handlers.handle_simulate_command(ctx, crate_type, amount)
 

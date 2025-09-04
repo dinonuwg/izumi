@@ -726,24 +726,33 @@ class IzumiAI(commands.Cog):
         """Split response into natural message chunks for human-like conversation with optimized thresholds"""
         import random
         
+        # Debug logging
+        print(f"🔧 Splitting response (length: {len(response)}): {response[:100]}...")
+        
         # Always keep very short messages as single (under 30 characters)
         if len(response) < 30:
+            print(f"🔧 Keeping short message as single")
             return [response]
         
         # 30-50 characters: 25% chance to split
         if 30 <= len(response) <= 50:
             if random.random() > 0.25:  # 75% chance to keep as single message
+                print(f"🔧 Keeping 30-50 char message as single")
                 return [response]
         
         # 50-100 characters: 50% chance to split
         elif 50 < len(response) <= 100:
             if random.random() > 0.50:  # 50% chance to keep as single message
+                print(f"🔧 Keeping 50-100 char message as single")
                 return [response]
         
         # 100-300 characters: 80% chance to split (same as before)
         elif 100 < len(response) <= 300:
             if random.random() < 0.2:  # 20% chance to keep as single message
+                print(f"🔧 Keeping 100-300 char message as single (rare)")
                 return [response]
+        
+        print(f"🔧 Attempting to split message...")
         
         # For longer messages, always try to split naturally
         parts = []
@@ -759,7 +768,7 @@ class IzumiAI(commands.Cog):
                     sentence += '.'
                 
                 # Check if adding this sentence would make the part too long
-                if len(current_part + sentence) > 300 and current_part:
+                if len(current_part + sentence) > 200 and current_part:  # Lowered from 300
                     parts.append(current_part.strip())
                     current_part = sentence
                 else:
@@ -778,9 +787,9 @@ class IzumiAI(commands.Cog):
             parts = [p.strip() for p in paragraphs if p.strip()]
         
         # If still one part and it's very long, split more aggressively
-        if len(parts) <= 1 and len(response) > 500:
-            # Split by common break points
-            break_points = ['. ', '! ', '? ', ', and ', ', but ', ', so ', ' - ']
+        if len(parts) <= 1 and len(response) > 200:  # Lowered from 500 to 200
+            # Split by common break points - more comprehensive list
+            break_points = ['. ', '! ', '? ', ', and ', ', but ', ', so ', ' - ', '; ', ': ', ', like ', ', with ', ', for ', ', that ', ', which ', ', as ']
             
             for break_point in break_points:
                 if break_point in response:
@@ -790,9 +799,9 @@ class IzumiAI(commands.Cog):
                     
                     for i, part in enumerate(temp_parts):
                         if i < len(temp_parts) - 1:
-                            part += break_point
+                            part += break_point.rstrip()  # Don't add trailing space
                         
-                        if len(current_part + part) > 300 and current_part:
+                        if len(current_part + part) > 200 and current_part:  # Lowered from 300 to 200
                             parts.append(current_part.strip())
                             current_part = part
                         else:
@@ -802,7 +811,27 @@ class IzumiAI(commands.Cog):
                         parts.append(current_part.strip())
                     
                     if len(parts) > 1:
+                        print(f"🔧 Successfully split at '{break_point}' into {len(parts)} parts")
                         break
+            
+            # If still not split and very long, force split at word boundaries
+            if len(parts) <= 1 and len(response) > 300:
+                words = response.split(' ')
+                current_part = ""
+                parts = []
+                
+                for word in words:
+                    if len(current_part + ' ' + word) > 200 and current_part:
+                        parts.append(current_part.strip())
+                        current_part = word
+                    else:
+                        current_part += (' ' + word if current_part else word)
+                
+                if current_part:
+                    parts.append(current_part.strip())
+                
+                if len(parts) > 1:
+                    print(f"🔧 Force split by words into {len(parts)} parts")
         
         # Ensure we have at least one part
         if not parts:
@@ -815,7 +844,7 @@ class IzumiAI(commands.Cog):
             current_merge = ""
             
             for part in parts:
-                if len(current_merge + part) < 400:
+                if len(current_merge + part) < 250:  # Lowered from 400
                     current_merge += (" " + part if current_merge else part)
                 else:
                     if current_merge:
@@ -835,6 +864,7 @@ class IzumiAI(commands.Cog):
             
             parts = merged_parts[:3]  # Limit to 3 parts max
         
+        print(f"🔧 Split result: {len(parts)} parts - {[len(p) for p in parts]}")
         return parts
             
     async def _calculate_typing_delay(self, text: str) -> float:

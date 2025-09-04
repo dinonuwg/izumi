@@ -578,7 +578,23 @@ class LevelingCog(commands.Cog, name="Leveling"):
             member = None
             all_users = True
         elif member is None:
-            await ctx.send("Please specify a member or use `!calculatexp all` to calculate for everyone.\n**Usage:**\n• `!calculatexp @user` - Calculate for one user\n• `!calculatexp all` - Calculate for everyone")
+            from utils.helpers import show_command_usage
+            await show_command_usage(
+                ctx, "calculatexp",
+                description="Calculate and assign XP based on all messages (admin only)",
+                usage_examples=[
+                    f"{COMMAND_PREFIX}calculatexp @user",
+                    f"{COMMAND_PREFIX}calculatexp all",
+                    f"{COMMAND_PREFIX}calcxp everyone",
+                    f"{COMMAND_PREFIX}retroxp *"
+                ],
+                notes=[
+                    "Requires administrator permissions",
+                    "Can calculate for one user or everyone",
+                    "Reviews all message history in accessible channels",
+                    "Use 'all', 'everyone', '*', or 'mass' for server-wide calculation"
+                ]
+            )
             return
         else:
             all_users = False

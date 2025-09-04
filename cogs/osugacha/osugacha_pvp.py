@@ -1221,40 +1221,22 @@ class OsuPvPCog(commands.Cog, name="Osu PvP Games"):
     async def osu_pvp_prefix(self, ctx: commands.Context, opponent: discord.Member = None, 
                             game_type: str = None, bet_amount: int = None):
         if not opponent or not game_type or not bet_amount:
-            embed = discord.Embed(
-                title="⚔️ PvP Games",
-                description="Challenge other players to exciting PvP games!",
-                color=discord.Color.purple()
+            from utils.helpers import show_command_usage
+            await show_command_usage(
+                ctx, "osupvp",
+                description="Challenge other players to exciting PvP games! ⚔️",
+                usage_examples=[
+                    f"{COMMAND_PREFIX}opvp @player pp 1000",
+                    f"{COMMAND_PREFIX}opvp @player rank 5000", 
+                    f"{COMMAND_PREFIX}pvp @player bg 2000"
+                ],
+                subcommands={
+                    "pp/duel/pp_duel": "PP comparison duel",
+                    "rank/guess/rank_guesser": "Guess the player's rank",
+                    "bg/background/bg_guesser": "Guess the background source"
+                },
+                notes=["Both players must have coins for the bet", "Winner takes all coins"]
             )
-            
-            embed.add_field(
-                name="Available Games",
-                value="**PP Duel** - `pp`, `duel`, `pp_duel`\n"
-                    "**Rank Guesser** - `rank`, `guess`, `rank_guesser`\n"
-                    "**Background Guesser** - `bg`, `background`, `bg_guesser`",
-                inline=False
-            )
-            
-            embed.add_field(
-                name="Usage Examples",
-                value="`!opvp @player pp 1000`\n"
-                    "`!opvp @player rank 5000`\n"
-                    "`!opvp @player bg 2000`\n\n"
-                    "`!opvp @player duel 1500`\n"
-                    "`!opvp @player guess 3000`\n"
-                    "`!opvp @player background 1000`",
-                inline=False
-            )
-            
-            embed.add_field(
-                name="Game Descriptions",
-                value="**PP Duel:** Random cards compete - highest effective PP wins!\n"
-                    "**Rank Guesser:** Guess mystery player's rank from stats\n"
-                    "**Background Guesser:** First to guess song from background wins!",
-                inline=False
-            )
-            
-            await ctx.send(embed=embed)
             return
         
         await self._pvp_command(ctx, opponent, game_type, bet_amount)

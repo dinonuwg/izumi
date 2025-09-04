@@ -370,3 +370,72 @@ class PaginationView(discord.ui.View):
             print(f"Error in pagination timeout handler: {e}")
             # Stop the view to prevent further issues
             self.stop()
+
+def create_command_help_embed(command_name, description, usage_examples, subcommands=None, notes=None):
+    """
+    Create a standardized help embed for commands when incorrect parameters are provided.
+    
+    Args:
+        command_name: Name of the command (e.g., "memory", "osuparty")
+        description: Brief description of what the command does
+        usage_examples: List of usage examples with descriptions
+        subcommands: Optional dict of subcommands {name: description}
+        notes: Optional additional notes or tips
+    
+    Returns:
+        discord.Embed: Formatted help embed
+    """
+    embed = discord.Embed(
+        title=f"📖 {command_name.title()} Command Help",
+        description=description,
+        color=discord.Color.blue()
+    )
+    
+    # Add usage examples
+    if usage_examples:
+        usage_text = "\n".join([f"`{example['usage']}` - {example['description']}" 
+                               for example in usage_examples])
+        embed.add_field(
+            name="💡 Usage Examples:",
+            value=usage_text,
+            inline=False
+        )
+    
+    # Add subcommands if provided
+    if subcommands:
+        subcommand_text = "\n".join([f"`{name}` - {desc}" 
+                                   for name, desc in subcommands.items()])
+        embed.add_field(
+            name="📋 Available Subcommands:",
+            value=subcommand_text,
+            inline=False
+        )
+    
+    # Add notes if provided
+    if notes:
+        embed.add_field(
+            name="📝 Notes:",
+            value=notes,
+            inline=False
+        )
+    
+    embed.set_footer(text="💡 Tip: Use the exact format shown in the examples!")
+    return embed
+
+def show_command_usage(ctx, command_name, command_data):
+    """
+    Convenience function to send command help embed.
+    
+    Args:
+        ctx: Command context
+        command_name: Name of the command
+        command_data: Dict containing help data (description, usage_examples, etc.)
+    """
+    embed = create_command_help_embed(
+        command_name,
+        command_data.get('description', 'No description available'),
+        command_data.get('usage_examples', []),
+        command_data.get('subcommands'),
+        command_data.get('notes')
+    )
+    return ctx.send(embed=embed)

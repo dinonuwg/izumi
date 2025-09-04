@@ -34,41 +34,35 @@ class MemoryManagement(commands.Cog):
     @commands.group(name='memory', invoke_without_command=True)
     async def memory(self, ctx):
         """Memory management commands for Izumi"""
-        embed = discord.Embed(
-            title="🧠 Izumi's Memory System",
-            description="Manage what Izumi remembers about users",
-            color=discord.Color.purple()
-        )
-        embed.add_field(
-            name="Commands:",
-            value=(
-                "`!memory view [user]` - View memories about a user\n"
-                "`!memory add <user> <note>` - Add a custom note\n"
-                "`!memory set <user> <field> <value>` - Set a specific field\n"
-                "`!memory trust <user> <-10 to 10>` - Set trust level\n"
-                "`!memory relate <user1> <user2> <relationship>` - Set relationship\n"
-                "`!memory shared <user1> <user2> <experience>` - Add shared experience\n"
-                "`!memory context <user>` - View user's social context\n"
-                "`!memory clear <user>` - Clear all memories about a user\n"
-                "`!memory forget <user>` - Make Izumi forget your conversation\n"
-                "`!memory self` - View Izumi's self-memories\n"
-                "`!memory selfadd <category> <value>` - Add to Izumi's memories\n"
-                "`!memory selfclear <category>` - Clear a category of self-memories\n"
-                "`!memory knowledge <info>` - Add general knowledge/information\n"
-                "`!memory viewknowledge` - View stored general knowledge"
-            ),
-            inline=False
-        )
-        embed.add_field(
-            name="Self-memory categories:",
-            value=(
-                "`personality_traits`, `likes`, `dislikes`, `backstory`, `goals`, "
-                "`fears`, `hobbies`, `favorite_things`, `pet_peeves`, `life_philosophy`, "
-                "`memories`, `relationships`, `skills`, `dreams`, `quirks`, `knowledge`"
-            ),
-            inline=False
-        )
-        await ctx.send(embed=embed)
+        from utils.helpers import show_command_usage
+        command_data = {
+            'description': '🧠 Manage what Izumi remembers about users and herself',
+            'subcommands': {
+                'view [user]': 'View memories about a user (defaults to yourself)',
+                'add <user> <note>': 'Add a custom note about a user',
+                'set <user> <field> <value>': 'Set a specific memory field',
+                'trust <user> <-10 to 10>': 'Set trust level for a user',
+                'relate <user1> <user2> <relationship>': 'Set relationship between users',
+                'shared <user1> <user2> <experience>': 'Add shared experience',
+                'context <user>': 'View user\'s social context',
+                'clear <user>': 'Clear all memories about a user',
+                'forget <user>': 'Make Izumi forget conversation history',
+                'self': 'View Izumi\'s self-memories',
+                'selfadd <category> <value>': 'Add to Izumi\'s self-memories',
+                'selfclear <category>': 'Clear a category of self-memories',
+                'knowledge <info>': 'Add general knowledge/information',
+                'viewknowledge': 'View stored general knowledge'
+            },
+            'usage_examples': [
+                {'usage': '!memory view @user', 'description': 'See what Izumi remembers about someone'},
+                {'usage': '!memory add @user likes cats', 'description': 'Add a note about user'},
+                {'usage': '!memory trust @user 8', 'description': 'Set high trust level'},
+                {'usage': '!memory self', 'description': 'View Izumi\'s personality'},
+                {'usage': '!memory selfadd personality_traits friendly and helpful', 'description': 'Add personality trait'}
+            ],
+            'notes': '📝 Available self-memory categories: personality_traits, likes, dislikes, backstory, goals, fears, hobbies, favorite_things, pet_peeves, life_philosophy, memories, relationships, skills, dreams, quirks, knowledge'
+        }
+        await show_command_usage(ctx, "memory", command_data)
 
     @memory.command(name='view')
     async def view_memory(self, ctx, user: discord.Member = None):
@@ -544,8 +538,41 @@ class MemoryManagement(commands.Cog):
 
     @memory.command(name='selfadd')
     @commands.has_permissions(manage_messages=True)
-    async def add_self_memory(self, ctx, category: str, *, value: str):
+    async def add_self_memory(self, ctx, category: str = None, *, value: str = None):
         """Add a memory about Izumi herself"""
+        if not category or not value:
+            from utils.helpers import show_command_usage
+            command_data = {
+                'description': 'Add memories about Izumi\'s personality and traits',
+                'usage_examples': [
+                    {'usage': '!memory selfadd personality_traits friendly and helpful', 'description': 'Add personality trait'},
+                    {'usage': '!memory selfadd likes playing games and chatting', 'description': 'Add something Izumi likes'},
+                    {'usage': '!memory selfadd backstory Created to help users', 'description': 'Add backstory information'},
+                    {'usage': '!memory selfadd goals helping everyone feel welcome', 'description': 'Add life goals'}
+                ],
+                'subcommands': {
+                    'personality_traits': 'Core personality characteristics',
+                    'likes': 'Things Izumi enjoys',
+                    'dislikes': 'Things Izumi doesn\'t like',
+                    'backstory': 'Izumi\'s history and origin',
+                    'goals': 'Life aspirations and objectives',
+                    'fears': 'Things that worry Izumi',
+                    'hobbies': 'Activities Izumi enjoys',
+                    'favorite_things': 'Specific favorite items/activities',
+                    'pet_peeves': 'Things that annoy Izumi',
+                    'life_philosophy': 'Core beliefs and values',
+                    'memories': 'Important experiences',
+                    'relationships': 'Important connections',
+                    'skills': 'Abilities and talents',
+                    'dreams': 'Hopes and aspirations',
+                    'quirks': 'Unique behaviors or traits',
+                    'knowledge': 'General information and facts'
+                },
+                'notes': '📝 Keep memories under 200 characters. Use clear, descriptive language.'
+            }
+            await show_command_usage(ctx, "memory selfadd", command_data)
+            return
+            
         valid_categories = [
             "personality_traits", "likes", "dislikes", "backstory", "goals",
             "fears", "hobbies", "favorite_things", "pet_peeves", "life_philosophy",
@@ -1055,56 +1082,7 @@ class MemoryManagement(commands.Cog):
         
         await ctx.send("📁 Here's Izumi's self-memory export:", file=file)
 
-    @app_commands.command(name="export_self_memories", description="Export Izumi's self-concept memories (Admin only)")
-    async def slash_export_self_memories(self, interaction: discord.Interaction):
-        """Export self-concept memories to a file (bot owner only)"""
-        if interaction.user.id != BOT_OWNER_ID:
-            await interaction.response.send_message("❌ Only the bot owner can use this command.", ephemeral=True)
-            return
-        
-        await interaction.response.defer(ephemeral=True)
-        
-        try:
-            self_memories = self.bot.get_izumi_self_memories()
-            
-            if not any(self_memories.values()):
-                await interaction.followup.send("❌ No self-concept data found.")
-                return
-                
-            # Create formatted export
-            export_text = "=== IZUMI'S SELF-CONCEPT MEMORIES ===\n\n"
-            
-            for category, values in self_memories.items():
-                if values:  # Only export categories with content
-                    category_name = category.replace('_', ' ').title()
-                    export_text += f"{category_name.upper()}:\n"
-                    
-                    if isinstance(values, list):
-                        for item in values:
-                            export_text += f"- {item}\n"
-                    else:
-                        export_text += f"- {values}\n"
-                    export_text += "\n"
-                
-            # Save to file and send
-            import io
-            file_obj = io.StringIO(export_text)
-            file = discord.File(file_obj, filename="izumi_self_memories.txt")
-            
-            # Count items for summary
-            total_items = sum(len(values) if isinstance(values, list) else (1 if values else 0) for values in self_memories.values())
-            categories_with_data = len([k for k, v in self_memories.items() if v])
-            
-            await interaction.followup.send(
-                f"📁 Exported {total_items} self-memories across {categories_with_data} categories.",
-                file=file
-            )
-            
-        except Exception as e:
-            print(f"Error exporting self memories: {e}")
-            await interaction.followup.send("❌ An error occurred while exporting memories.")
-
-    # ==================== SLASH COMMANDS ====================
+    # ==================== SLASH COMMANDS (Essential Only) ====================
     
     @app_commands.command(name="memory_view", description="View memories about a user")
     async def slash_view_memory(self, interaction: discord.Interaction, user: discord.Member = None):
@@ -1270,199 +1248,16 @@ class MemoryManagement(commands.Cog):
         
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
-    @app_commands.command(name="memory_add", description="Add a custom note about a user")
-    async def slash_add_note(self, interaction: discord.Interaction, user: discord.Member, note: str):
-        """Add a custom note about a user (bot owner only)"""
-        if interaction.user.id != BOT_OWNER_ID:
-            await interaction.response.send_message("❌ Only the bot owner can use this command.", ephemeral=True)
-            return
-            
-        if len(note) > 100:
-            await interaction.response.send_message("Note is too long! Keep it under 100 characters.", ephemeral=True)
-            return
-        
-        self.bot.update_user_memory(user.id, "custom_notes", note, append=True)
-        await self.bot.save_immediately()  # Force immediate save for real-time updates
-        await interaction.response.send_message(f"✅ Added note about {user.display_name}: '{note}'", ephemeral=True)
-
-    @app_commands.command(name="memory_set", description="Set a specific memory field for a user")
-    @app_commands.describe(
-        user="The user to update",
-        field="The field to set (name, nickname, age, birthday, relationship_status, conversation_style)",
-        value="The value to set"
-    )
-    async def slash_set_field(self, interaction: discord.Interaction, user: discord.Member, field: str, value: str):
-        """Set a specific memory field for a user (bot owner only)"""
-        if interaction.user.id != BOT_OWNER_ID:
-            await interaction.response.send_message("❌ Only the bot owner can use this command.", ephemeral=True)
-            return
-            
-        valid_fields = ["name", "nickname", "age", "birthday", "relationship_status", "conversation_style"]
-        
-        if field not in valid_fields:
-            await interaction.response.send_message(f"Invalid field! Valid fields: {', '.join(valid_fields)}", ephemeral=True)
-            return
-        
-        # Convert age to int if needed
-        if field == "age":
-            try:
-                value = int(value)
-                if not (5 <= value <= 100):
-                    await interaction.response.send_message("Age must be between 5 and 100!", ephemeral=True)
-                    return
-            except ValueError:
-                await interaction.response.send_message("Age must be a number!", ephemeral=True)
-                return
-        
-        self.bot.update_user_memory(user.id, field, value)
-        await self.bot.save_immediately()  # Force immediate save for real-time updates
-        await interaction.response.send_message(f"✅ Set {field} for {user.display_name} to: '{value}'", ephemeral=True)
-
-    @app_commands.command(name="memory_trust", description="Set trust level for a user")
-    @app_commands.describe(
-        user="The user to update",
-        trust_level="Trust level (-10 to 10)"
-    )
-    async def slash_set_trust(self, interaction: discord.Interaction, user: discord.Member, trust_level: int):
-        """Set trust level for a user (bot owner only)"""
-        if interaction.user.id != BOT_OWNER_ID:
-            await interaction.response.send_message("❌ Only the bot owner can use this command.", ephemeral=True)
-            return
-            
-        if not (-10 <= trust_level <= 10):
-            await interaction.response.send_message("Trust level must be between -10 and 10!", ephemeral=True)
-            return
-        
-        self.bot.update_user_memory(user.id, "trust_level", trust_level)
-        await self.bot.save_immediately()  # Force immediate save for real-time updates
-        
-        trust_desc = "very high trust" if trust_level > 7 else \
-                    "high trust" if trust_level > 3 else \
-                    "neutral" if trust_level == 0 else \
-                    "low trust" if trust_level > -5 else \
-                    "very low trust"
-        
-        await interaction.response.send_message(f"✅ Set trust level for {user.display_name} to {trust_level}/10 ({trust_desc})", ephemeral=True)
-
-    @app_commands.command(name="memory_relate", description="Set relationship between two users")
-    @app_commands.describe(
-        user1="First user",
-        user2="Second user", 
-        relationship="Relationship type (friend, sibling, teammate, etc.)"
-    )
-    async def slash_set_relationship(self, interaction: discord.Interaction, user1: discord.Member, user2: discord.Member, relationship: str):
-        """Set relationship between two users (bot owner only)"""
-        if interaction.user.id != BOT_OWNER_ID:
-            await interaction.response.send_message("❌ Only the bot owner can use this command.", ephemeral=True)
-            return
-            
-        if len(relationship) > 50:
-            await interaction.response.send_message("Relationship description is too long! Keep it under 50 characters.", ephemeral=True)
-            return
-        
-        self.bot.update_user_relationship(user1.id, user2.id, relationship)
-        await self.bot.save_immediately()  # Force immediate save for real-time updates
-        await interaction.response.send_message(f"✅ Set relationship: {user1.display_name} → {user2.display_name} ({relationship})", ephemeral=True)
-
-    @app_commands.command(name="memory_shared", description="Add a shared experience between two users")
-    @app_commands.describe(
-        user1="First user",
-        user2="Second user",
-        experience="Description of shared experience"
-    )
-    async def slash_add_shared_experience(self, interaction: discord.Interaction, user1: discord.Member, user2: discord.Member, experience: str):
-        """Add a shared experience between two users (bot owner only)"""
-        if interaction.user.id != BOT_OWNER_ID:
-            await interaction.response.send_message("❌ Only the bot owner can use this command.", ephemeral=True)
-            return
-            
-        if len(experience) > 100:
-            await interaction.response.send_message("Experience description is too long! Keep it under 100 characters.", ephemeral=True)
-            return
-        
-        self.bot.add_shared_experience(user1.id, user2.id, experience)
-        await self.bot.save_immediately()  # Force immediate save for real-time updates
-        await interaction.response.send_message(f"✅ Added shared experience between {user1.display_name} and {user2.display_name}: '{experience}'", ephemeral=True)
-
-    @app_commands.command(name="memory_context", description="View social context for a user")
-    async def slash_view_context(self, interaction: discord.Interaction, user: discord.Member = None):
-        """View social context for a user (bot owner only)"""
-        if interaction.user.id != BOT_OWNER_ID:
-            await interaction.response.send_message("❌ Only the bot owner can use this command.", ephemeral=True)
-            return
-            
-        if user is None:
-            user = interaction.user
-        
-        # Get the social context that would be provided to the AI
-        context = self.bot.get_shared_context(user.id, interaction.guild.id, interaction.channel.id)
-        
-        embed = discord.Embed(
-            title=f"🌐 Social Context for {user.display_name}",
-            color=discord.Color.blue()
-        )
-        
-        if context:
-            # Parse and format the context nicely
-            context_clean = context.replace("OTHER USERS CONTEXT: ", "")
-            parts = context_clean.split(" | ")
-            
-            for part in parts:
-                if ":" in part:
-                    key, value = part.split(":", 1)
-                    embed.add_field(
-                        name=key.strip().title(),
-                        value=value.strip(),
-                        inline=False
-                    )
-        else:
-            embed.add_field(
-                name="No Context Available",
-                value="This user has no social connections or recent activity context.",
-                inline=False
-            )
-        
-        await interaction.response.send_message(embed=embed, ephemeral=True)
-
-    @app_commands.command(name="memory_clear", description="Clear all memories about a user")
-    async def slash_clear_memory(self, interaction: discord.Interaction, user: discord.Member):
-        """Clear all memories about a user (bot owner only)"""
-        if interaction.user.id != BOT_OWNER_ID:
-            await interaction.response.send_message("❌ Only the bot owner can use this command.", ephemeral=True)
-            return
-            
-        user_id_str = str(user.id)
-        try:
-            # Check if user has memories in unified system
-            if user_id_str in self.bot.unified_memory.memory_data.get('users', {}):
-                # Clear user data from unified memory
-                del self.bot.unified_memory.memory_data['users'][user_id_str]
-                self.bot.unified_memory.pending_saves = True
-                self.bot.unified_memory.save_unified_data()
-                await interaction.response.send_message(f"✅ Cleared all memories about {user.display_name}", ephemeral=True)
-            else:
-                await interaction.response.send_message(f"No memories found for {user.display_name}", ephemeral=True)
-        except Exception as e:
-            await interaction.response.send_message(f"Error clearing memories: {e}", ephemeral=True)
-
-    @app_commands.command(name="memory_forget", description="Clear conversation history with Izumi")
-    async def slash_forget_conversation(self, interaction: discord.Interaction, user: discord.Member = None):
-        """Clear conversation history with Izumi (bot owner only)"""
-        if interaction.user.id != BOT_OWNER_ID:
-            await interaction.response.send_message("❌ Only the bot owner can use this command.", ephemeral=True)
-            return
-            
-        if user is None:
-            user = interaction.user
-        
-        # Get the AI cog to clear chat sessions
-        ai_cog = self.bot.get_cog('IzumiAI')
-        if ai_cog and user.id in ai_cog.gemini_chat_sessions:
-            del ai_cog.gemini_chat_sessions[user.id]
-            await interaction.response.send_message(f"✅ Cleared conversation history for {user.display_name}", ephemeral=True)
-        else:
-            await interaction.response.send_message(f"No conversation history found for {user.display_name}", ephemeral=True)
-
+    # Removed memory_add slash command - use !memory add <user> <note> instead
+    
+    # Removed memory_set slash command - use !memory set <user> <field> <value> instead
+    
+    # Removed memory_trust, memory_relate, memory_shared slash commands
+    # Use prefix commands instead: !memory trust, !memory relate, !memory shared
+    
+    # Removed memory_context, memory_clear, memory_forget slash commands
+    # Use prefix commands instead: !memory context, !memory clear, !memory forget
+    
     @app_commands.command(name="memory_self", description="View Izumi's self-memories")
     async def slash_view_self_memories(self, interaction: discord.Interaction):
         """View Izumi's self-memories (bot owner only)"""
@@ -1502,141 +1297,11 @@ class MemoryManagement(commands.Cog):
         
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
-    @app_commands.command(name="memory_selftest", description="Test if self-memories are being retrieved correctly")
-    async def slash_test_self_memories(self, interaction: discord.Interaction):
-        """Test if self-memories are being retrieved correctly (bot owner only)"""
-        if interaction.user.id != BOT_OWNER_ID:
-            await interaction.response.send_message("❌ Only the bot owner can use this command.", ephemeral=True)
-            return
-            
-        # Test the unified memory system
-        self_memories = self.bot.unified_memory.get_izumi_self_memories()
-        
-        # Test the bot's formatting method
-        formatted_self = self.bot.format_izumi_self_for_ai()
-        
-        embed = discord.Embed(
-            title="🧪 Self-Memory System Test",
-            color=discord.Color.orange()
-        )
-        
-        # Show raw data
-        total_items = sum(len(values) if isinstance(values, list) else (1 if values else 0) for values in self_memories.values())
-        embed.add_field(
-            name="Raw Memory Data",
-            value=f"Categories with data: {len([k for k, v in self_memories.items() if v])}\nTotal items: {total_items}",
-            inline=False
-        )
-        
-        # Show character count info
-        if formatted_self:
-            embed.add_field(
-                name="AI Data Stats",
-                value=f"Full length: {len(formatted_self)} characters\nLines: {len(formatted_self.split(chr(10)))}\nIs truncated below: {'Yes' if len(formatted_self) > 1000 else 'No'}",
-                inline=False
-            )
-            
-            # Show formatted output (truncated for Discord)
-            formatted_display = formatted_self[:1000] + "..." if len(formatted_self) > 1000 else formatted_self
-            embed.add_field(
-                name="Formatted for AI (Discord Preview - May Be Truncated)",
-                value=f"```{formatted_display}```",
-                inline=False
-            )
-        else:
-            embed.add_field(
-                name="Formatted for AI",
-                value="❌ No formatted output (this is the problem!)",
-                inline=False
-            )
-        
-        await interaction.response.send_message(embed=embed, ephemeral=True)
-        
-        # If the data was truncated, send the full version
-        if formatted_self and len(formatted_self) > 1000:
-            await interaction.followup.send("📄 **Full AI Data (EXACTLY what Izumi sees):**", ephemeral=True)
-            
-            # Split into chunks if needed for Discord's 2000 character limit
-            chunks = []
-            current_chunk = ""
-            
-            for line in formatted_self.split('\n'):
-                if len(current_chunk + line + '\n') > 1900:  # Leave some room
-                    chunks.append(current_chunk)
-                    current_chunk = line + '\n'
-                else:
-                    current_chunk += line + '\n'
-            
-            if current_chunk:
-                chunks.append(current_chunk)
-            
-            # Send each chunk
-            for i, chunk in enumerate(chunks):
-                if i == 0:
-                    await interaction.followup.send(f"```\n{chunk}\n```", ephemeral=True)
-                else:
-                    await interaction.followup.send(f"```\n{chunk}\n```", ephemeral=True)
-
-    @app_commands.command(name="memory_selfadd", description="Add a memory about Izumi herself")
-    @app_commands.describe(
-        category="Category (personality_traits, likes, dislikes, backstory, goals, fears, hobbies, etc.)",
-        value="Memory content"
-    )
-    async def slash_add_self_memory(self, interaction: discord.Interaction, category: str, value: str):
-        """Add a memory about Izumi herself (bot owner only)"""
-        if interaction.user.id != BOT_OWNER_ID:
-            await interaction.response.send_message("❌ Only the bot owner can use this command.", ephemeral=True)
-            return
-            
-        valid_categories = [
-            "personality_traits", "likes", "dislikes", "backstory", "goals",
-            "fears", "hobbies", "favorite_things", "pet_peeves", "life_philosophy",
-            "memories", "relationships", "skills", "dreams", "quirks", "knowledge"
-        ]
-        
-        if category not in valid_categories:
-            await interaction.response.send_message(f"Invalid category! Valid categories: {', '.join(valid_categories)}", ephemeral=True)
-            return
-        
-        if len(value) > 200:
-            await interaction.response.send_message("Memory is too long! Keep it under 200 characters.", ephemeral=True)
-            return
-        
-        self.bot.update_izumi_self_memory(category, value, append=True)
-        await self.bot.save_immediately()  # Force immediate save for real-time updates
-        category_name = category.replace('_', ' ').title()
-        await interaction.response.send_message(f"✅ Added to Izumi's {category_name}: '{value}'", ephemeral=True)
-
-    @app_commands.command(name="memory_selfclear", description="Clear a category of Izumi's self-memories")
-    @app_commands.describe(
-        category="Category to clear"
-    )
-    async def slash_clear_self_memory(self, interaction: discord.Interaction, category: str):
-        """Clear a category of Izumi's self-memories (bot owner only)"""
-        if interaction.user.id != BOT_OWNER_ID:
-            await interaction.response.send_message("❌ Only the bot owner can use this command.", ephemeral=True)
-            return
-            
-        valid_categories = [
-            "personality_traits", "likes", "dislikes", "backstory", "goals",
-            "fears", "hobbies", "favorite_things", "pet_peeves", "life_philosophy",
-            "memories", "relationships", "skills", "dreams", "quirks", "knowledge"
-        ]
-        
-        if category not in valid_categories:
-            await interaction.response.send_message(f"Invalid category! Valid categories: {', '.join(valid_categories)}", ephemeral=True)
-            return
-        
-        self_memories = self.bot.get_izumi_self_memories()
-        if category in self_memories:
-            self_memories[category] = []
-            self.bot.pending_saves = True
-            await self.bot.save_immediately()  # Force immediate save for real-time updates
-            category_name = category.replace('_', ' ').title()
-            await interaction.response.send_message(f"✅ Cleared Izumi's {category_name} memories", ephemeral=True)
-        else:
-            await interaction.response.send_message(f"No memories found in category: {category}", ephemeral=True)
-
+    # Removed memory_selftest slash command - use !memory selftest prefix command instead
+    
+    # Removed memory_selfadd and memory_selfclear slash commands
+    # Use prefix commands instead: !memory selfadd, !memory selfclear
+    
     @commands.command(name='train')
     async def train_on_history(self, ctx, channel: discord.TextChannel = None, limit: int = 10000):
         """Train Izumi on historical messages in a channel"""

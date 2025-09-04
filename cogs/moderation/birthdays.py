@@ -314,7 +314,22 @@ class BirthdaysCog(commands.Cog, name="Birthdays"):
     @commands.command(name="setbirthday", aliases=["setbday", "setbd", "birthday_set", "bday_set", "bd_set"])
     async def setbirthday_prefix(self, ctx: commands.Context, *, birthday_str: str = None):
         if birthday_str is None:
-            await ctx.send("Please provide your birthday. Usage: `!setbirthday MM-DD` or `!setbirthday YYYY-MM-DD`")
+            from utils.helpers import show_command_usage
+            command_data = {
+                'description': '🎂 Set your birthday for celebrations and notifications',
+                'usage_examples': [
+                    {'usage': '!setbirthday 03-15', 'description': 'Set birthday to March 15th (no year)'},
+                    {'usage': '!setbirthday 1995-03-15', 'description': 'Set birthday with birth year'},
+                    {'usage': '!setbd 12-25', 'description': 'Using alias for Christmas birthday'},
+                    {'usage': '!setbday 07-04', 'description': 'Using alias for July 4th birthday'}
+                ],
+                'subcommands': {
+                    'MM-DD format': 'Just month and day (recommended)',
+                    'YYYY-MM-DD format': 'Include birth year for age calculation'
+                },
+                'notes': '🔒 Your birthday is stored securely\n🎉 Others can see it with `!birthday @you`\n⚠️ Year must be between 1900 and current year'
+            }
+            await show_command_usage(ctx, "setbirthday", command_data)
             return
         
         parts = birthday_str.split('-')

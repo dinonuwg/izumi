@@ -9,6 +9,9 @@ from discord.ext import commands
 from discord import app_commands
 from utils.config import *
 
+# Load BOT_OWNER_ID from environment variable
+BOT_OWNER_ID = int(os.getenv("BOT_OWNER_ID", "0"))  # Default to 0 if not set
+
 class UtilityCog(commands.Cog, name="Utility"):
     def __init__(self, bot):
         self.bot = bot
@@ -118,7 +121,22 @@ class UtilityCog(commands.Cog, name="Utility"):
         # Split by words to analyze
         words = args.split()
         if not words:
-            await ctx.send("Please provide a time and message. Example: `!remindme 1 hour take out dishes`")
+            from utils.helpers import show_command_usage
+            await show_command_usage(
+                ctx, "remindme",
+                description="Set a reminder for yourself or allow others to opt in",
+                usage_examples=[
+                    f"{COMMAND_PREFIX}remindme 1 hour take out dishes",
+                    f"{COMMAND_PREFIX}remind 30 minutes check the oven",
+                    f"{COMMAND_PREFIX}rm 2d 6h 30m important meeting",
+                    f"{COMMAND_PREFIX}reminder 45 default to minutes"
+                ],
+                notes=[
+                    "Time formats: 2h, 30min, 1d, 2d 6h 30m",
+                    "Bare numbers default to minutes",
+                    "Can combine multiple time units"
+                ]
+            )
             return
         
         # Try to parse different combinations to find valid time
@@ -476,122 +494,6 @@ class UtilityCog(commands.Cog, name="Utility"):
                 
             await interaction.response.send_message(embed=embed, ephemeral=True)
 
-    @app_commands.command(name="shutdown", description="Shutdown the bot (Owner only)")
-    async def shutdown_slash(self, interaction: discord.Interaction):
-        """Shutdown the bot (Owner only)"""
-        if interaction.user.id != self.bot.owner_id:
-            await interaction.response.send_message("❌ Only the bot owner can use this command.", ephemeral=True)
-            return
-            
-        embed = discord.Embed(
-            title="🛑 Bot Shutdown", 
-            description="Saving data and shutting down...", 
-            color=discord.Color.red()
-        )
-        await interaction.response.send_message(embed=embed)
-        
-        # Save data before shutdown
-        await self.bot.save_immediately()
-        
-        # Close the bot
-        await self.bot.close()
-
-    @app_commands.command(name="save", description="Manually save all data (Admin only)")
-    async def save_slash(self, interaction: discord.Interaction):
-        """Manually save all data (Admin only)"""
-        if not interaction.user.guild_permissions.administrator:
-            await interaction.response.send_message("❌ This command requires administrator permissions.", ephemeral=True)
-            return
-            
-        try:
-            await self.bot.save_immediately()
-            embed = discord.Embed(
-                title="💾 Data Saved", 
-                description="All data has been saved to JSON files.", 
-                color=discord.Color.green()
-            )
-        except Exception as e:
-            embed = discord.Embed(
-                title="❌ Save Error", 
-                description=f"Error saving data: {e}", 
-                color=discord.Color.red()
-            )
-        
-        await interaction.response.send_message(embed=embed, ephemeral=True)
-
-    @app_commands.command(name="restart", description="Restart the bot (Owner only)")
-    async def restart_slash(self, interaction: discord.Interaction):
-        """Restart the bot (Owner only)"""
-        if interaction.user.id != self.bot.owner_id:
-            await interaction.response.send_message("❌ Only the bot owner can use this command.", ephemeral=True)
-            return
-            
-        embed = discord.Embed(
-            title="🔄 Bot Restart", 
-            description="Saving data and restarting...", 
-            color=discord.Color.orange()
-        )
-        await interaction.response.send_message(embed=embed)
-        
-        # Save data before restart
-        await self.bot.save_immediately()
-        
-        # Use subprocess to preserve signal handling
-        import subprocess
-        import asyncio
-        
-        async def delayed_restart():
-            await asyncio.sleep(0.5)  # Give time for message to send
-            subprocess.Popen([sys.executable] + sys.argv)
-            await self.bot.close()
-            import os
-            os._exit(0)
-        
-        # Schedule restart without blocking
-        asyncio.create_task(delayed_restart())
-
-    @app_commands.command(name="proactive", description="Manually trigger a proactive message from Izumi (Admin only)")
-    async def proactive_slash(self, interaction: discord.Interaction):
-        """Manually trigger a proactive message from Izumi (admin only)"""
-        if not interaction.user.guild_permissions.administrator:
-            await interaction.response.send_message("❌ This command requires administrator permissions.", ephemeral=True)
-            return
-            
-        # Access unified memory system directly from bot
-        if not hasattr(self.bot, 'unified_memory'):
-            await interaction.response.send_message("❌ Unified memory system not available", ephemeral=True)
-            return
-            
-        try:
-            result = await self.bot.unified_memory.send_unprompted_message(self.bot, channel_id=interaction.channel.id)
-            if result:
-                await interaction.response.send_message("✅ Triggered proactive message!", ephemeral=True)
-            else:
-                await interaction.response.send_message("ℹ️ No proactive message was appropriate right now", ephemeral=True)
-        except Exception as e:
-            await interaction.response.send_message(f"❌ Error: {e}", ephemeral=True)
-
-    @app_commands.command(name="birthday_ping", description="Manually test the birthday ping system (Admin only)")
-    async def birthday_ping_slash(self, interaction: discord.Interaction):
-        """Manually test the birthday ping system (admin only)"""
-        if not interaction.user.guild_permissions.administrator:
-            await interaction.response.send_message("❌ This command requires administrator permissions.", ephemeral=True)
-            return
-            
-        unified_memory = self.bot.get_cog('UnifiedMemory')
-        if not unified_memory:
-            await interaction.response.send_message("❌ Unified memory system not available", ephemeral=True)
-            return
-            
-        try:
-            result = await unified_memory.send_random_birthday_ping(self.bot)
-            if result:
-                await interaction.response.send_message(f"✅ Birthday ping sent: {result}", ephemeral=True)
-            else:
-                await interaction.response.send_message("ℹ️ No birthday users found or cooldown active", ephemeral=True)
-        except Exception as e:
-            await interaction.response.send_message(f"❌ Error: {e}", ephemeral=True)
-
     # Prefix command versions
     @commands.command(name="help", aliases=["h", "commands", "cmd", "cmds"])
     async def help_prefix(self, ctx: commands.Context, *, command_name: str = None):
@@ -737,6 +639,124 @@ class UtilityCog(commands.Cog, name="Utility"):
                 await ctx.send("ℹ️ No birthday users found or cooldown active", delete_after=10)
         except Exception as e:
             await ctx.send(f"❌ Error: {e}")
+
+    @app_commands.command(name="prefixcommands", description="[OWNER] View all available prefix commands")
+    async def prefix_commands_reference(self, interaction: discord.Interaction):
+        """Shows all available prefix commands (bot owner only)"""
+        if interaction.user.id != BOT_OWNER_ID:
+            await interaction.response.send_message("❌ Only the bot owner can use this command.", ephemeral=True)
+            return
+        
+        # Comprehensive list of all prefix commands organized by category
+        commands_data = {
+            "🤖 **AI & Memory Commands**": [
+                "`!memory <user>` - View memories about a user",
+                "`!memory add <user> <note>` - Add a custom note about a user",
+                "`!memory set <user> <field> <value>` - Set a specific memory field",
+                "`!memory trust <user> <level>` - Set trust level (-10 to 10)",
+                "`!memory relate <user1> <user2> <relationship>` - Set relationship",
+                "`!memory shared <user1> <user2> <experience>` - Add shared experience",
+                "`!memory context <user>` - View social context for a user",
+                "`!memory clear <user>` - Clear all memories about a user",
+                "`!memory forget <user>` - Clear conversation history",
+                "`!memory self` - View Izumi's self-memories",
+                "`!memory selftest` - Test self-memory system",
+                "`!memory selfadd <category> <value>` - Add self-memory",
+                "`!memory selfclear <category>` - Clear self-memory category",
+                "`!train [channel] [limit]` - Train on channel messages",
+                "`!trainall [limit]` - Train on all server channels"
+            ],
+            "🛠️ **Admin & Utility Commands**": [
+                "`!shutdown` - Shut down the bot",
+                "`!save` - Force save all data",
+                "`!restart` - Restart the bot",
+                "`!proactive <on/off>` - Toggle proactive responses",
+                "`!birthday_ping` - Test birthday ping system",
+                "`!remind <time> <message>` - Set a reminder",
+                "`!reminders` - View your reminders",
+                "`!cancel_reminder <id>` - Cancel a reminder"
+            ],
+            "🎮 **Osu! Gacha Commands**": [
+                "`!osugive <user> <coins/player> [mutation]` - Give coins or cards",
+                "`!osusimulate <crate_type> [amount]` - Simulate crate openings",
+                "`!osupity <user>` - Add/remove user from pity list",
+                "`!osuparty <mode> [args...]` - Manage osu party events",
+                "`!osureset <user>` - Reset user's gacha data",
+                "`!osuaddcard <user> <player> [mutation]` - Add card to user",
+                "`!osuremovecard <user> <card_id>` - Remove card from user",
+                "`!osusetcoins <user> <amount>` - Set user's coin amount",
+                "`!osuimport` - Import card data from JSON",
+                "`!osuexport <user>` - Export user's card data"
+            ],
+            "👥 **Moderation Commands**": [
+                "`!warn <user> [reason]` - Warn a user",
+                "`!warnings <user>` - View user's warnings",
+                "`!clearwarnings <user>` - Clear user's warnings",
+                "`!mute <user> [time] [reason]` - Mute a user",
+                "`!unmute <user>` - Unmute a user",
+                "`!kick <user> [reason]` - Kick a user",
+                "`!ban <user> [reason]` - Ban a user",
+                "`!unban <user>` - Unban a user",
+                "`!purge <amount>` - Delete messages"
+            ],
+            "🎂 **Birthday & Social Commands**": [
+                "`!setbirthday <DD/MM>` - Set your birthday",
+                "`!birthday [user]` - View birthday info",
+                "`!birthdays` - List upcoming birthdays",
+                "`!clearbirthday` - Clear your birthday",
+                "`!rep <user>` - Give reputation points",
+                "`!profile [user]` - View user profile",
+                "`!leaderboard [page]` - View XP leaderboard"
+            ],
+            "🔧 **Level & Role Commands**": [
+                "`!level [user]` - Check XP/level",
+                "`!setlevel <user> <level>` - Set user's level",
+                "`!addxp <user> <amount>` - Add XP to user",
+                "`!levelroles` - View level roles",
+                "`!addlevelrole <level> <role>` - Add level role",
+                "`!removelevelrole <level>` - Remove level role"
+            ]
+        }
+        
+        # Create embeds (split due to Discord's character limits)
+        embeds = []
+        current_embed = discord.Embed(
+            title="📋 Complete Prefix Commands Reference",
+            description="All available prefix commands organized by category.\n*Note: Many admin commands were removed as slash commands to stay under Discord's 100 command limit.*",
+            color=discord.Color.blue()
+        )
+        
+        for category, commands in commands_data.items():
+            # Check if adding this category would exceed Discord's field limits
+            commands_text = "\n".join(commands)
+            
+            if len(current_embed.fields) >= 6 or len(current_embed) + len(commands_text) > 5500:
+                # Start a new embed
+                embeds.append(current_embed)
+                current_embed = discord.Embed(
+                    title="📋 Prefix Commands Reference (continued)",
+                    color=discord.Color.blue()
+                )
+            
+            current_embed.add_field(
+                name=category,
+                value=commands_text,
+                inline=False
+            )
+        
+        # Add the last embed
+        if current_embed.fields:
+            embeds.append(current_embed)
+        
+        # Add footer to the last embed
+        if embeds:
+            embeds[-1].set_footer(text=f"Total categories: {len(commands_data)} | Use these commands with the bot's prefix!")
+        
+        # Send all embeds
+        await interaction.response.send_message(embed=embeds[0], ephemeral=True)
+        
+        for embed in embeds[1:]:
+            await interaction.followup.send(embed=embed, ephemeral=True)
 
 async def setup(bot):
     await bot.add_cog(UtilityCog(bot))

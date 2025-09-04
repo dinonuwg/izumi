@@ -117,7 +117,17 @@ class OsuGachaTradingCog(commands.Cog, name="Osu Gacha Trading"):
     @commands.command(name="osutrade", aliases=["otrade", "trade"])
     async def osu_trade_prefix(self, ctx: commands.Context, player: discord.Member = None, action: str = "start"):
         if not player:
-            await ctx.send("Please specify a player to trade with\nExample: `!osutrade @user`")
+            from utils.helpers import show_command_usage
+            command_data = {
+                'description': '🔄 Trade cards and coins with other players',
+                'usage_examples': [
+                    {'usage': '!osutrade @player', 'description': 'Start a trade with another player'},
+                    {'usage': '!otrade @user', 'description': 'Start trade (short alias)'},
+                    {'usage': '!trade @friend', 'description': 'Start trade (shortest alias)'}
+                ],
+                'notes': '💡 Once started, you can add cards and coins using the interactive buttons!\n🚫 You cannot trade with bots or yourself.'
+            }
+            await show_command_usage(ctx, "osutrade", command_data)
             return
         await self._trade_command(ctx, player, action)
 
