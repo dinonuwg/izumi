@@ -37,14 +37,15 @@ class IzumiAI(commands.Cog):
         # Track recent responses to prevent duplicates
         self.recent_responses = {}  # {user_id: timestamp} - Track last response time per user
         
-        # API optimization features
+        # API optimization features - Load persistent data
         self.response_cache = {}  # Simple response caching
-        self.daily_api_calls = 0
-        self.daily_quick_responses = 0  # Track quick responses too
-        self.last_cache_clear = time.time()
+        self.api_usage_data = self._load_api_usage_data()
+        self.daily_api_calls = self.api_usage_data.get('daily_api_calls', 0)
+        self.daily_quick_responses = self.api_usage_data.get('daily_quick_responses', 0)
+        self.last_cache_clear = self.api_usage_data.get('last_cache_clear', time.time())
         
         # Detailed tracking
-        self.api_call_log = []  # Store recent API calls for analysis
+        self.api_call_log = self.api_usage_data.get('api_call_log', [])  # Store recent API calls for analysis
         
         # Python-based response patterns to reduce API calls
         self.quick_responses = self._init_quick_responses()
@@ -144,6 +145,83 @@ class IzumiAI(commands.Cog):
                 ]
             }
         }
+    
+    def _load_api_usage_data(self) -> dict:
+        """Load persistent API usage data from file"""
+        try:
+            from utils.helpers import load_json
+            data = load_json('data/api_usage_data.json')
+            
+            # Check if data is from today (reset daily counters if new day)
+            import datetime
+            current_date = datetime.datetime.now().strftime('%Y-%m-%d')
+            stored_date = data.get('date', '')
+            
+            if stored_date != current_date:
+                # New day, reset daily counters but keep historical data
+                print(f"🔄 New day detected ({stored_date} → {current_date}). Resetting daily counters.")
+                return {
+                    'date': current_date,
+                    'daily_api_calls': 0,
+                    'daily_quick_responses': 0,
+                    'last_cache_clear': time.time(),
+                    'api_call_log': [],
+                    'total_api_calls': data.get('total_api_calls', 0),
+                    'total_quick_responses': data.get('total_quick_responses', 0),
+                    'historical_data': data.get('historical_data', [])
+                }
+            
+            print(f"📊 Loaded API usage data: {data.get('daily_api_calls', 0)} API calls today")
+            return data
+            
+        except FileNotFoundError:
+            print("📝 No existing API usage data found, starting fresh.")
+            import datetime
+            return {
+                'date': datetime.datetime.now().strftime('%Y-%m-%d'),
+                'daily_api_calls': 0,
+                'daily_quick_responses': 0,
+                'last_cache_clear': time.time(),
+                'api_call_log': [],
+                'total_api_calls': 0,
+                'total_quick_responses': 0,
+                'historical_data': []
+            }
+        except Exception as e:
+            print(f"⚠️ Error loading API usage data: {e}")
+            import datetime
+            return {
+                'date': datetime.datetime.now().strftime('%Y-%m-%d'),
+                'daily_api_calls': 0,
+                'daily_quick_responses': 0,
+                'last_cache_clear': time.time(),
+                'api_call_log': [],
+                'total_api_calls': 0,
+                'total_quick_responses': 0,
+                'historical_data': []
+            }
+    
+    def _save_api_usage_data(self):
+        """Save persistent API usage data to file"""
+        try:
+            from utils.helpers import save_json
+            import datetime
+            
+            # Update the data structure
+            self.api_usage_data.update({
+                'date': datetime.datetime.now().strftime('%Y-%m-%d'),
+                'daily_api_calls': self.daily_api_calls,
+                'daily_quick_responses': self.daily_quick_responses,
+                'last_cache_clear': self.last_cache_clear,
+                'api_call_log': self.api_call_log,
+                'total_api_calls': self.api_usage_data.get('total_api_calls', 0) + (self.daily_api_calls - self.api_usage_data.get('daily_api_calls', 0)),
+                'total_quick_responses': self.api_usage_data.get('total_quick_responses', 0) + (self.daily_quick_responses - self.api_usage_data.get('daily_quick_responses', 0))
+            })
+            
+            save_json('data/api_usage_data.json', self.api_usage_data)
+            
+        except Exception as e:
+            print(f"⚠️ Error saving API usage data: {e}")
 
     def _check_quick_response(self, message_content: str) -> str:
         """Check if we can use a quick Python response instead of API call"""
@@ -607,6 +685,7 @@ class IzumiAI(commands.Cog):
             quick_response = self._check_quick_response(combined_prompt)
             if quick_response:
                 self.daily_quick_responses += 1
+                self._save_api_usage_data()  # Save persistent data
                 print(f"🚀 Using quick response #{self.daily_quick_responses} (API saved): {quick_response}")
                 
                 # Split response if needed and send
@@ -946,16 +1025,38 @@ class IzumiAI(commands.Cog):
         
         # Track API usage
         self.daily_api_calls += 1
+        self._save_api_usage_data()  # Save persistent data
         
         # Clear cache daily to prevent memory buildup
         current_time = time.time()
         if current_time - self.last_cache_clear > 86400:  # 24 hours
+            # Save current day's data to historical before resetting
+            import datetime
+            historical_entry = {
+                'date': datetime.datetime.fromtimestamp(self.last_cache_clear).strftime('%Y-%m-%d'),
+                'api_calls': self.daily_api_calls,
+                'quick_responses': self.daily_quick_responses,
+                'total_interactions': self.daily_api_calls + self.daily_quick_responses
+            }
+            
+            if 'historical_data' not in self.api_usage_data:
+                self.api_usage_data['historical_data'] = []
+            self.api_usage_data['historical_data'].append(historical_entry)
+            
+            # Keep only last 30 days of history
+            if len(self.api_usage_data['historical_data']) > 30:
+                self.api_usage_data['historical_data'] = self.api_usage_data['historical_data'][-30:]
+            
+            # Reset daily counters
             self.response_cache.clear()
             self.api_call_log.clear()
             self.daily_api_calls = 0
             self.daily_quick_responses = 0
             self.last_cache_clear = current_time
-            print(f"🔄 Daily cache cleared. API calls and quick responses reset.")
+            
+            # Save the reset data
+            self._save_api_usage_data()
+            print(f"🔄 Daily cache cleared. API calls and quick responses reset. Historical data saved.")
         
         # Log this API call
         self.api_call_log.append({
@@ -1153,6 +1254,9 @@ class IzumiAI(commands.Cog):
         if random.random() < 0.05:  # 5% chance
             response_text = self._apply_occasional_typo(response_text)
         
+        # Remove unnecessary periods from casual responses
+        response_text = self._remove_casual_periods(response_text)
+        
         return response_text
     
     def _apply_occasional_typo(self, text: str) -> str:
@@ -1169,6 +1273,44 @@ class IzumiAI(commands.Cog):
                 # Make the typo then correct it
                 text_with_typo = text.replace(correct_word, typo_word)
                 return f"{text_with_typo}\\n*{correct_word}"
+        
+        return text
+    
+    def _remove_casual_periods(self, text: str) -> str:
+        """Remove unnecessary periods from casual responses to sound more natural"""
+        if not text or len(text.strip()) == 0:
+            return text
+        
+        text = text.strip()
+        
+        # Don't remove periods if:
+        # 1. The response is long (more than 100 characters) - likely explanatory
+        # 2. The response has multiple sentences (contains . followed by space and capital letter)
+        # 3. The response ends with other punctuation (!, ?, etc.)
+        # 4. The response contains formal indicators
+        
+        # Check if it's a long response
+        if len(text) > 100:
+            return text
+        
+        # Check if it has multiple sentences
+        import re
+        if re.search(r'\.\s+[A-Z]', text):
+            return text
+        
+        # Check if it ends with other punctuation
+        if text.endswith(('!', '?', '...', '~')):
+            return text
+        
+        # Check for formal indicators that should keep periods
+        formal_indicators = ['thank you', 'please', 'however', 'therefore', 'additionally', 'furthermore']
+        text_lower = text.lower()
+        if any(indicator in text_lower for indicator in formal_indicators):
+            return text
+        
+        # Remove trailing period for casual responses
+        if text.endswith('.'):
+            return text[:-1]
         
         return text
     
@@ -1745,6 +1887,8 @@ class IzumiAI(commands.Cog):
         # Save data before shutdown
         try:
             self.learning_engine.save_unified_data()
+            self._save_api_usage_data()  # Save API usage data
+            print("💾 Saved API usage data before shutdown")
         except Exception as e:
             print(f"Error saving data during shutdown: {e}")
 
