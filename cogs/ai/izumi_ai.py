@@ -676,24 +676,26 @@ class IzumiAI(commands.Cog):
             await message.reply("sorry, having technical issues rn", mention_author=False)
 
     async def _collect_recent_user_messages(self, original_message: discord.Message) -> list:
-        """Collect recent messages from the same user within 10 seconds (before AND after the original)"""
-        messages = [original_message]
+        """Collect recent conversation context from all users within 30 seconds"""
+        messages = []
         
         try:
-            # Get messages AFTER the original message (sent during the 5-second wait)
-            async for msg in original_message.channel.history(limit=10, after=original_message.created_at):
-                # Only collect messages from the same user within 10 seconds
-                time_diff = (msg.created_at - original_message.created_at).total_seconds()
-                if msg.author == original_message.author and time_diff <= 10:
+            # Get recent conversation context from ALL users, not just the original author
+            async for msg in original_message.channel.history(limit=15, before=original_message.created_at):
+                # Collect messages from anyone within 30 seconds for better conversation context
+                time_diff = (original_message.created_at - msg.created_at).total_seconds()
+                if time_diff <= 30 and not msg.author.bot:  # Don't include bot messages
                     messages.append(msg)
-                elif time_diff > 10:
+                elif time_diff > 30:
                     break
             
-            # Also get messages BEFORE the original message (in case they sent multiple quickly)
-            before_time = original_message.created_at
-            async for msg in original_message.channel.history(limit=10, before=original_message.created_at):
-                # Only collect messages from the same user within 10 seconds before
-                time_diff = (original_message.created_at - msg.created_at).total_seconds()
+            # Add the original message
+            messages.append(original_message)
+            
+            # Also get any messages that came AFTER (during the processing delay)
+            async for msg in original_message.channel.history(limit=5, after=original_message.created_at):
+                # Only collect messages from the original user within 10 seconds (for multi-part messages)
+                time_diff = (msg.created_at - original_message.created_at).total_seconds()
                 if msg.author == original_message.author and time_diff <= 10:
                     messages.append(msg)
                 elif time_diff > 10:
@@ -701,14 +703,15 @@ class IzumiAI(commands.Cog):
                     
         except Exception as e:
             print(f"Error collecting recent messages: {e}")
+            return [original_message]
         
         # Sort by timestamp to maintain order
         messages.sort(key=lambda m: m.created_at)
-        print(f"📥 Collected {len(messages)} messages from {original_message.author.display_name}")
+        print(f"📥 Collected {len(messages)} messages from conversation context (last 30s)")
         return messages
 
     def _combine_user_messages(self, messages: list) -> str:
-        """Combine multiple messages from the same user into one prompt"""
+        """Combine conversation context from multiple users into a natural prompt"""
         if not messages:
             return ""
         
@@ -718,157 +721,80 @@ class IzumiAI(commands.Cog):
             content = msg.content.replace(f'<@{self.bot.user.id}>', '').strip()
             content = content.replace(f'<@!{self.bot.user.id}>', '').strip()
             if content:
-                combined_parts.append(content)
+                # Include who said what for better context
+                author_name = msg.author.display_name
+                combined_parts.append(f"{author_name}: {content}")
         
-        return ' '.join(combined_parts)
+        return '\n'.join(combined_parts)
 
     def _split_response_naturally(self, response: str) -> list:
-        """Split response into natural message chunks for human-like conversation with optimized thresholds"""
-        import random
-        
+        """Split response into natural message chunks using punctuation"""
         # Debug logging
         print(f"🔧 Splitting response (length: {len(response)}): {response[:100]}...")
         
-        # Always keep very short messages as single (under 30 characters)
-        if len(response) < 30:
+        # Don't split short messages (under 120 characters)
+        if len(response) < 120:
             print(f"🔧 Keeping short message as single")
             return [response]
         
-        # 30-50 characters: 25% chance to split
-        if 30 <= len(response) <= 50:
-            if random.random() > 0.25:  # 75% chance to keep as single message
-                print(f"🔧 Keeping 30-50 char message as single")
-                return [response]
+        # For longer messages, split at natural punctuation points
+        print(f"🔧 Attempting to split message at punctuation...")
         
-        # 50-100 characters: 50% chance to split
-        elif 50 < len(response) <= 100:
-            if random.random() > 0.50:  # 50% chance to keep as single message
-                print(f"🔧 Keeping 50-100 char message as single")
-                return [response]
+        # Split at natural punctuation marks in order of preference
+        split_points = ['! ', '? ', '. ', ', and ', ', but ', ', so ', '; ', ': ', ', ']
         
-        # 100-300 characters: 80% chance to split (same as before)
-        elif 100 < len(response) <= 300:
-            if random.random() < 0.2:  # 20% chance to keep as single message
-                print(f"🔧 Keeping 100-300 char message as single (rare)")
-                return [response]
-        
-        print(f"🔧 Attempting to split message...")
-        
-        # For longer messages, always try to split naturally
-        parts = []
-        
-        # First, try splitting by sentences
-        sentences = response.split('. ')
-        if len(sentences) > 1:
-            current_part = ""
-            
-            for i, sentence in enumerate(sentences):
-                # Add period back except for the last sentence
-                if i < len(sentences) - 1:
-                    sentence += '.'
-                
-                # Check if adding this sentence would make the part too long
-                if len(current_part + sentence) > 200 and current_part:  # Lowered from 300
-                    parts.append(current_part.strip())
-                    current_part = sentence
-                else:
-                    if current_part:
-                        current_part += ' ' + sentence
-                    else:
-                        current_part = sentence
-            
-            # Add the final part
-            if current_part:
-                parts.append(current_part.strip())
-        
-        # If sentence splitting didn't work well, try paragraph splitting
-        if len(parts) <= 1 and '\n' in response:
-            paragraphs = response.split('\n')
-            parts = [p.strip() for p in paragraphs if p.strip()]
-        
-        # If still one part and it's very long, split more aggressively
-        if len(parts) <= 1 and len(response) > 200:  # Lowered from 500 to 200
-            # Split by common break points - more comprehensive list
-            break_points = ['. ', '! ', '? ', ', and ', ', but ', ', so ', ' - ', '; ', ': ', ', like ', ', with ', ', for ', ', that ', ', which ', ', as ']
-            
-            for break_point in break_points:
-                if break_point in response:
-                    temp_parts = response.split(break_point)
-                    current_part = ""
-                    parts = []
-                    
-                    for i, part in enumerate(temp_parts):
-                        if i < len(temp_parts) - 1:
-                            part += break_point.rstrip()  # Don't add trailing space
-                        
-                        if len(current_part + part) > 200 and current_part:  # Lowered from 300 to 200
-                            parts.append(current_part.strip())
-                            current_part = part
-                        else:
-                            current_part += part
-                    
-                    if current_part:
-                        parts.append(current_part.strip())
-                    
-                    if len(parts) > 1:
-                        print(f"🔧 Successfully split at '{break_point}' into {len(parts)} parts")
-                        break
-            
-            # If still not split and very long, force split at word boundaries
-            if len(parts) <= 1 and len(response) > 300:
-                words = response.split(' ')
-                current_part = ""
+        for split_point in split_points:
+            if split_point in response:
                 parts = []
+                segments = response.split(split_point)
+                current_part = ""
                 
-                for word in words:
-                    if len(current_part + ' ' + word) > 200 and current_part:
+                for i, segment in enumerate(segments):
+                    # Add the split point back (except for the last segment)
+                    if i < len(segments) - 1:
+                        segment += split_point.rstrip()
+                    
+                    # If adding this segment would make it too long, finalize current part
+                    if len(current_part + segment) > 300 and current_part:
                         parts.append(current_part.strip())
-                        current_part = word
+                        current_part = segment
                     else:
-                        current_part += (' ' + word if current_part else word)
+                        current_part += segment
                 
+                # Add the final part
                 if current_part:
                     parts.append(current_part.strip())
                 
-                if len(parts) > 1:
-                    print(f"🔧 Force split by words into {len(parts)} parts")
+                # Only use this split if it actually created multiple meaningful parts
+                if len(parts) > 1 and all(len(part.strip()) > 10 for part in parts):
+                    print(f"🔧 Successfully split at '{split_point}' into {len(parts)} parts")
+                    part_lengths = [len(part) for part in parts]
+                    print(f"🔧 Split result: {len(parts)} parts - {part_lengths}")
+                    return parts
         
-        # Ensure we have at least one part
-        if not parts:
-            parts = [response]
+        # If no good split point found, return as single message
+        print(f"🔧 No good split point found, keeping as single message")
+        return [response]
+
+    async def _send_response_parts(self, message: discord.Message, response_parts: list, typing_delay: bool = True):
+        """Send multiple response parts with human-like delays"""
+        if not response_parts:
+            return
         
-        # Limit to maximum 3 parts to avoid spam
-        if len(parts) > 3:
-            # Merge some parts together
-            merged_parts = []
-            current_merge = ""
+        for i, part in enumerate(response_parts):
+            if not part.strip():
+                continue
             
-            for part in parts:
-                if len(current_merge + part) < 250:  # Lowered from 400
-                    current_merge += (" " + part if current_merge else part)
-                else:
-                    if current_merge:
-                        merged_parts.append(current_merge)
-                    current_merge = part
-                    
-                if len(merged_parts) >= 2:  # Already have 2 parts, merge rest into 3rd
-                    break
+            if typing_delay and i > 0:  # Add delay between parts (not for the first one)
+                delay = await self._calculate_typing_delay(part)
+                await asyncio.sleep(delay)
             
-            if current_merge:
-                merged_parts.append(current_merge)
-            
-            # If we still have remaining parts, add them to the last part
-            remaining_parts = parts[len(merged_parts):]
-            if remaining_parts and merged_parts:
-                merged_parts[-1] += " " + " ".join(remaining_parts)
-            
-            parts = merged_parts[:3]  # Limit to 3 parts max
-        
-        print(f"🔧 Split result: {len(parts)} parts - {[len(p) for p in parts]}")
-        return parts
-            
+            try:
+                await message.channel.send(part)
+            except Exception as e:
+                print(f"Error sending response part {i}: {e}")
+
     async def _calculate_typing_delay(self, text: str) -> float:
-        """Calculate human-like typing delay based on 80 WPM, mood, and time of day"""
         import asyncio
         import random
         
