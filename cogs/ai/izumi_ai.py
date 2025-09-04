@@ -10,6 +10,7 @@ import google.generativeai as genai
 import os
 import time
 import asyncio
+import random
 from typing import Dict, Optional
 
 from .learning_engine import LearningEngine
@@ -133,9 +134,19 @@ class IzumiAI(commands.Cog):
                 )
                 
                 if response_text and len(response_text.strip()) > 0:
-                    # Use human-like typing delay
-                    await self._type_with_delay(message.channel, response_text)
-                    await message.channel.send(response_text)
+                    # Split response into multiple messages if needed
+                    message_parts = self._split_response_naturally(response_text)
+                    
+                    # Send each part with appropriate delays
+                    for i, part in enumerate(message_parts):
+                        # Show typing indicator with human-like delay
+                        await self._type_with_delay(message.channel, part)
+                        await message.channel.send(part)
+                        
+                        # Brief pause between multiple messages (if more than one part)
+                        if len(message_parts) > 1 and i < len(message_parts) - 1:
+                            await asyncio.sleep(random.uniform(0.5, 1.5))
+                    
                     print(f"✅ Successfully joined conversation: {response_text[:50]}...")
                     
                     # Track that Izumi is now participating in this conversation
@@ -267,9 +278,19 @@ class IzumiAI(commands.Cog):
             )
             
             if response_text and len(response_text.strip()) > 0:
-                # Use human-like typing delay
-                await self._type_with_delay(message.channel, response_text)
-                await message.channel.send(response_text)
+                # Split response into multiple messages if needed
+                message_parts = self._split_response_naturally(response_text)
+                
+                # Send each part with appropriate delays
+                for i, part in enumerate(message_parts):
+                    # Show typing indicator with human-like delay
+                    await self._type_with_delay(message.channel, part)
+                    await message.channel.send(part)
+                    
+                    # Brief pause between multiple messages (if more than one part)
+                    if len(message_parts) > 1 and i < len(message_parts) - 1:
+                        await asyncio.sleep(random.uniform(0.5, 1.5))
+                
                 print(f"✅ Continued conversation: {response_text[:50]}...")
                 
                 # Update participation tracker
@@ -346,9 +367,15 @@ class IzumiAI(commands.Cog):
         return f"{base_prompt}Instruction: {instruction}"
     
     async def _handle_ai_response(self, message: discord.Message):
-        """Generate and send AI response"""
+        """Generate and send AI response with delay to catch follow-up messages"""
         if not self.gemini_model:
             return
+        
+        # Wait 5 seconds to collect any follow-up messages from the same user
+        await asyncio.sleep(5)
+        
+        # Collect recent messages from the same user in the last 10 seconds
+        recent_messages = await self._collect_recent_user_messages(message)
         
         # Check for emotional responses first (for users returning after absence)
         emotional_context = self.learning_engine.get_emotional_context(message.author.id, message.guild.id)
@@ -359,15 +386,14 @@ class IzumiAI(commands.Cog):
             return
         
         try:
-            # Remove bot mention from message for processing
-            prompt = message.content.replace(f'<@{self.bot.user.id}>', '').strip()
-            prompt = message.content.replace(f'<@!{self.bot.user.id}>', '').strip()
+            # Combine all recent messages from the user
+            combined_prompt = self._combine_user_messages(recent_messages)
             
-            if not prompt:
-                prompt = "hello"
+            if not combined_prompt:
+                combined_prompt = "hello"
             
             # Process mentions for AI context
-            processed_prompt = self.bot.process_mentions_for_ai(prompt, message.guild.id)
+            processed_prompt = self.bot.process_mentions_for_ai(combined_prompt, message.guild.id)
             
             # Build comprehensive context
             context = self.context_builder.build_smart_context(
@@ -392,11 +418,24 @@ class IzumiAI(commands.Cog):
             if not response_text:
                 response_text = "sorry, having technical issues rn"
             
-            # Show typing indicator with human-like delay based on response length
-            await self._type_with_delay(message.channel, response_text)
+            # Split response into multiple messages if needed
+            message_parts = self._split_response_naturally(response_text)
             
-            # Send the response
-            await message.reply(response_text, mention_author=False)
+            # Send each part with appropriate delays
+            for i, part in enumerate(message_parts):
+                # Show typing indicator with human-like delay
+                await self._type_with_delay(message.channel, part)
+                
+                if i == 0:
+                    # Reply to the original message for the first part
+                    await message.reply(part, mention_author=False)
+                else:
+                    # Send follow-up messages normally
+                    await message.channel.send(part)
+                
+                # Brief pause between multiple messages (if more than one part)
+                if len(message_parts) > 1 and i < len(message_parts) - 1:
+                    await asyncio.sleep(random.uniform(0.5, 1.5))
             
             # Track that Izumi is now participating in this conversation
             self.participation_tracker[message.channel.id] = {
@@ -407,6 +446,147 @@ class IzumiAI(commands.Cog):
         except Exception as e:
             print(f"Error in AI response: {e}")
             await message.reply("sorry, having technical issues rn", mention_author=False)
+
+    async def _collect_recent_user_messages(self, original_message: discord.Message) -> list:
+        """Collect recent messages from the same user within 10 seconds"""
+        messages = [original_message]
+        
+        try:
+            # Get messages from the channel history
+            async for msg in original_message.channel.history(limit=10, after=original_message.created_at):
+                # Only collect messages from the same user within 10 seconds
+                time_diff = (msg.created_at - original_message.created_at).total_seconds()
+                if msg.author == original_message.author and time_diff <= 10:
+                    messages.append(msg)
+                elif time_diff > 10:
+                    break
+                    
+        except Exception as e:
+            print(f"Error collecting recent messages: {e}")
+        
+        # Sort by timestamp to maintain order
+        messages.sort(key=lambda m: m.created_at)
+        return messages
+
+    def _combine_user_messages(self, messages: list) -> str:
+        """Combine multiple messages from the same user into one prompt"""
+        if not messages:
+            return ""
+        
+        combined_parts = []
+        for msg in messages:
+            # Remove bot mentions from each message
+            content = msg.content.replace(f'<@{self.bot.user.id}>', '').strip()
+            content = content.replace(f'<@!{self.bot.user.id}>', '').strip()
+            if content:
+                combined_parts.append(content)
+        
+        return ' '.join(combined_parts)
+
+    def _split_response_naturally(self, response: str) -> list:
+        """Split response into natural message chunks for human-like conversation"""
+        import random
+        
+        # Don't split if response is short (under 150 characters)
+        if len(response) < 150:
+            return [response]
+        
+        # Don't split if response is medium length (150-300 chars) most of the time
+        if 150 <= len(response) <= 300:
+            if random.random() < 0.8:  # 80% chance to keep as single message
+                return [response]
+        
+        # For longer messages, try to split naturally
+        parts = []
+        
+        # First, try splitting by sentences
+        sentences = response.split('. ')
+        if len(sentences) > 1:
+            current_part = ""
+            
+            for i, sentence in enumerate(sentences):
+                # Add period back except for the last sentence
+                if i < len(sentences) - 1:
+                    sentence += '.'
+                
+                # Check if adding this sentence would make the part too long
+                if len(current_part + sentence) > 300 and current_part:
+                    parts.append(current_part.strip())
+                    current_part = sentence
+                else:
+                    if current_part:
+                        current_part += ' ' + sentence
+                    else:
+                        current_part = sentence
+            
+            # Add the final part
+            if current_part:
+                parts.append(current_part.strip())
+        
+        # If sentence splitting didn't work well, try paragraph splitting
+        if len(parts) <= 1 and '\n' in response:
+            paragraphs = response.split('\n')
+            parts = [p.strip() for p in paragraphs if p.strip()]
+        
+        # If still one part and it's very long, split more aggressively
+        if len(parts) <= 1 and len(response) > 500:
+            # Split by common break points
+            break_points = ['. ', '! ', '? ', ', and ', ', but ', ', so ', ' - ']
+            
+            for break_point in break_points:
+                if break_point in response:
+                    temp_parts = response.split(break_point)
+                    current_part = ""
+                    parts = []
+                    
+                    for i, part in enumerate(temp_parts):
+                        if i < len(temp_parts) - 1:
+                            part += break_point
+                        
+                        if len(current_part + part) > 300 and current_part:
+                            parts.append(current_part.strip())
+                            current_part = part
+                        else:
+                            current_part += part
+                    
+                    if current_part:
+                        parts.append(current_part.strip())
+                    
+                    if len(parts) > 1:
+                        break
+        
+        # Ensure we have at least one part
+        if not parts:
+            parts = [response]
+        
+        # Limit to maximum 3 parts to avoid spam
+        if len(parts) > 3:
+            # Merge some parts together
+            merged_parts = []
+            current_merge = ""
+            
+            for part in parts:
+                if len(current_merge + part) < 400:
+                    current_merge += (" " + part if current_merge else part)
+                else:
+                    if current_merge:
+                        merged_parts.append(current_merge)
+                    current_merge = part
+                    
+                if len(merged_parts) >= 2:  # Already have 2 parts, merge rest into 3rd
+                    break
+            
+            if current_merge:
+                merged_parts.append(current_merge)
+            
+            # If we still have remaining parts, add them to the last part
+            remaining_parts = parts[len(merged_parts):]
+            if remaining_parts and merged_parts:
+                merged_parts[-1] += " " + " ".join(remaining_parts)
+            
+            parts = merged_parts[:3]  # Limit to 3 parts max
+        
+        return parts
             
     async def _calculate_typing_delay(self, text: str) -> float:
         """Calculate human-like typing delay based on 80 WPM, mood, and time of day"""
