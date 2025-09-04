@@ -1193,6 +1193,21 @@ class OsuGachaSystem:
                     
         return self._font_cache[cache_key]
 
+    def _get_fitted_font(self, text, font_name, max_size, max_width, min_size=12):
+        """Get a font that fits the text within the specified width"""
+        # Start with the maximum size and work down
+        for size in range(max_size, min_size - 1, -1):
+            font = self._get_cached_font(font_name, size)
+            # Get text bounding box
+            bbox = font.getbbox(text)
+            text_width = bbox[2] - bbox[0]
+            
+            if text_width <= max_width:
+                return font
+        
+        # If even minimum size doesn't fit, return minimum size font
+        return self._get_cached_font(font_name, min_size)
+
     async def create_card_image(self, player_data, stars, mutation=None, card_price=0, flashback_year=None):
         """Create enhanced card image with FULL mutation effects - OPTIMIZED"""
         try:
@@ -1273,16 +1288,15 @@ class OsuGachaSystem:
                 card.paste(profile_img, (130, 30), profile_img)
             
             # Use cached fonts
-            title_font = self._get_cached_font("arialbd.ttf", 32)
             text_font = self._get_cached_font("arialbd.ttf", 20)
             small_font = self._get_cached_font("arial.ttf", 16)
             value_font = self._get_cached_font("arialbd.ttf", 22)
             
-            
-            # Player name with enhanced shadow
+            # Player name with dynamic font sizing (no truncation)
             name_text = player_data['username']
-            if len(name_text) > 12:
-                name_text = name_text[:9] + "..."
+            # Calculate max width for name (card width minus padding)
+            max_name_width = width - 40  # 20px padding on each side
+            title_font = self._get_fitted_font(name_text, "arialbd.ttf", 32, max_name_width, 16)
             
             self._draw_text_with_shadow(draw, (width//2, 190), name_text, title_font, 'white', 'black')
             
