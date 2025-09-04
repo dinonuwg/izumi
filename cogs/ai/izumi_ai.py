@@ -740,6 +740,8 @@ class IzumiAI(commands.Cog):
                 response_text = "sorry, having technical issues rn"
             
             # Split response into multiple messages if needed
+            # First, handle any newlines in the response by splitting on them
+            response_text = self._preprocess_response_for_splitting(response_text)
             message_parts = self._split_response_naturally(response_text)
             print(f"🔧 Split into {len(message_parts)} parts: {[len(part) for part in message_parts]}")
             
@@ -826,6 +828,28 @@ class IzumiAI(commands.Cog):
         
         return '\n'.join(combined_parts)
 
+    def _preprocess_response_for_splitting(self, response: str) -> str:
+        """Preprocess response to handle newlines and prepare for message splitting"""
+        if not response:
+            return response
+        
+        # If the response contains newlines, it might be intended as separate messages
+        # Replace newlines with a special marker that our splitting function can handle
+        
+        # First, clean up any double newlines or excessive whitespace
+        import re
+        response = re.sub(r'\n\s*\n', '\n', response)  # Remove double newlines
+        response = re.sub(r'\n\s+', '\n', response)    # Remove whitespace after newlines
+        
+        # If there are newlines, split on them and treat each line as a separate message intention
+        if '\n' in response:
+            lines = [line.strip() for line in response.split('\n') if line.strip()]
+            if len(lines) > 1:
+                # Join with a special separator that our splitting function will recognize
+                return ' |SPLIT| '.join(lines)
+        
+        return response
+
     def _split_response_naturally(self, response: str) -> list:
         """Split response into natural message chunks like casual typing (30-60 chars per message)"""
         import random
@@ -833,16 +857,38 @@ class IzumiAI(commands.Cog):
         # Debug logging
         print(f"🔧 Splitting response (length: {len(response)}): {response[:100]}...")
         
+        # First check if the response contains our special split marker (from newlines)
+        if '|SPLIT|' in response:
+            pre_split_parts = [part.strip() for part in response.split('|SPLIT|') if part.strip()]
+            print(f"🔧 Found {len(pre_split_parts)} pre-split parts from newlines")
+            
+            # If we have multiple parts from newlines, split each one naturally if needed
+            final_parts = []
+            for part in pre_split_parts:
+                if len(part) <= 60:  # Keep short parts as-is
+                    final_parts.append(part)
+                else:
+                    # Split longer parts naturally
+                    sub_parts = self._split_long_text_naturally(part)
+                    final_parts.extend(sub_parts)
+            return final_parts
+        
         # Always keep very short messages as single (under 35 characters)
         if len(response) < 35:
             print(f"🔧 Keeping very short message as single")
             return [response]
         
         # Split into casual typing chunks (30-60 characters each)
+        return self._split_long_text_naturally(response)
+    
+    def _split_long_text_naturally(self, text: str) -> list:
+        """Split long text into casual typing chunks (30-60 chars each)"""
+        import random
+        
         print(f"🔧 Splitting into casual typing chunks (30-60 chars each)...")
         
         parts = []
-        remaining_text = response.strip()
+        remaining_text = text.strip()
         
         while remaining_text:
             # Random target length between 30-60 characters
@@ -896,7 +942,7 @@ class IzumiAI(commands.Cog):
         part_lengths = [len(part) for part in parts]
         print(f"🔧 Split result: {len(parts)} parts - {part_lengths}")
         
-        return parts if parts else [response]
+        return parts if parts else [text]
 
     async def _send_response_parts(self, message: discord.Message, response_parts: list, typing_delay: bool = True):
         """Send multiple response parts with human-like delays"""
@@ -1272,7 +1318,7 @@ class IzumiAI(commands.Cog):
             if correct_word.lower() in text.lower():
                 # Make the typo then correct it
                 text_with_typo = text.replace(correct_word, typo_word)
-                return f"{text_with_typo}\\n*{correct_word}"
+                return f"{text_with_typo}\n*{correct_word}"
         
         return text
     
