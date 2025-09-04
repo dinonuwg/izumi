@@ -938,9 +938,9 @@ class IzumiAI(commands.Cog):
             'prompt_length': len(prompt)
         })
         
-        # Keep only last 100 API calls in log to prevent memory issues
-        if len(self.api_call_log) > 100:
-            self.api_call_log = self.api_call_log[-100:]
+        # Keep only last 1000 API calls in log to prevent memory issues
+        if len(self.api_call_log) > 1000:
+            self.api_call_log = self.api_call_log[-1000:]
         
         print(f"📊 API Call #{self.daily_api_calls} | Quick Responses: {self.daily_quick_responses}")
         
@@ -1405,7 +1405,253 @@ class IzumiAI(commands.Cog):
             await ctx.send(f"✅ Reset chat session for {user.display_name}")
         else:
             await ctx.send(f"No active chat session found for {user.display_name}")
-    
+
+    # Slash command versions of all prefix commands
+    @app_commands.command(name="api_usage", description="Show API usage statistics and optimization info")
+    @app_commands.describe()
+    async def slash_api_usage(self, interaction: discord.Interaction):
+        """Slash command version of api_usage"""
+        if not interaction.user.guild_permissions.administrator:
+            await interaction.response.send_message("❌ This command requires administrator permissions.", ephemeral=True)
+            return
+        
+        # Use the same logic as the prefix command
+        embed = discord.Embed(
+            title="📊 API Usage & Optimization Stats",
+            color=discord.Color.green()
+        )
+        
+        # Calculate time since last reset
+        time_since_reset = time.time() - self.last_cache_clear
+        hours_since_reset = time_since_reset / 3600
+        
+        # API Usage Stats
+        total_interactions = self.daily_api_calls + self.daily_quick_responses
+        if total_interactions > 0:
+            api_percentage = (self.daily_api_calls / total_interactions) * 100
+            quick_percentage = (self.daily_quick_responses / total_interactions) * 100
+        else:
+            api_percentage = quick_percentage = 0
+        
+        embed.add_field(
+            name="🔢 Daily Interactions",
+            value=f"**{self.daily_api_calls}** API calls ({api_percentage:.1f}%)\n"
+                  f"**{self.daily_quick_responses}** Quick responses ({quick_percentage:.1f}%)\n"
+                  f"**{total_interactions}** Total interactions\n"
+                  f"⏰ {hours_since_reset:.1f} hours since reset",
+            inline=False
+        )
+        
+        # Efficiency Stats
+        if total_interactions > 0:
+            api_savings = (self.daily_quick_responses / total_interactions) * 100
+            embed.add_field(
+                name="💰 API Savings",
+                value=f"**{api_savings:.1f}%** of calls saved\n"
+                      f"🎯 Quick responses working effectively",
+                inline=True
+            )
+        
+        # Cache Stats
+        cache_size = len(self.response_cache)
+        log_size = len(self.api_call_log)
+        embed.add_field(
+            name="💾 Cache & Logs",
+            value=f"**{cache_size}** cached responses\n"
+                  f"📝 **{log_size}** recent API calls logged\n"
+                  f"🔄 Resets every 24 hours",
+            inline=True
+        )
+        
+        # Quick Response Stats
+        quick_patterns = sum(len(data['patterns']) for data in self.quick_responses.values())
+        embed.add_field(
+            name="🚀 Quick Responses",
+            value=f"**{quick_patterns}** patterns available\n"
+                  f"💡 Saves ~60-80% API calls",
+            inline=True
+        )
+        
+        # Performance Info
+        if self.daily_api_calls > 0:
+            avg_calls_per_hour = self.daily_api_calls / max(hours_since_reset, 0.1)
+            projected_daily = avg_calls_per_hour * 24
+            
+            embed.add_field(
+                name="📈 Projections",
+                value=f"**{avg_calls_per_hour:.1f}** calls/hour\n"
+                      f"📊 ~{projected_daily:.0f} projected daily",
+                inline=True
+            )
+        
+        # Cache efficiency
+        embed.add_field(
+            name="⚡ Efficiency",
+            value=f"🎯 Pattern matching: **Instant**\n"
+                  f"🤖 API responses: **~2-5s**\n"
+                  f"💰 Cost savings: **High**",
+            inline=True
+        )
+        
+        # Next reset time
+        next_reset = self.last_cache_clear + 86400  # 24 hours
+        next_reset_str = f"<t:{int(next_reset)}:R>"
+        embed.add_field(
+            name="🔄 Next Reset",
+            value=f"{next_reset_str}",
+            inline=True
+        )
+        
+        embed.set_footer(text="Use this to monitor API usage and optimization effectiveness")
+        await interaction.response.send_message(embed=embed)
+
+    @app_commands.command(name="ai_stats", description="Show AI learning statistics")
+    @app_commands.describe()
+    async def slash_ai_stats(self, interaction: discord.Interaction):
+        """Slash command version of ai_stats"""
+        if not interaction.user.guild_permissions.administrator:
+            await interaction.response.send_message("❌ This command requires administrator permissions.", ephemeral=True)
+            return
+        
+        # Get learning data from unified memory structure
+        memory_data = self.learning_engine.memory_data
+        users_data = memory_data.get('users', {})
+        
+        embed = discord.Embed(
+            title="🤖 AI Learning Statistics",
+            color=discord.Color.blue()
+        )
+        
+        # General stats - count users with various data types
+        vocab_users = sum(1 for user_data in users_data.values() 
+                         if user_data.get('learning_data', {}).get('vocabulary_trends'))
+        sentiment_users = sum(1 for user_data in users_data.values() 
+                             if user_data.get('learning_data', {}).get('sentiment_patterns'))
+        relationship_users = sum(1 for user_data in users_data.values() 
+                                if user_data.get('learning_data', {}).get('relationship_networks'))
+        
+        embed.add_field(
+            name="📊 Learning Coverage",
+            value=f"**{len(users_data)}** total users tracked\n"
+                  f"**{vocab_users}** users with vocabulary data\n"
+                  f"**{sentiment_users}** users with sentiment data\n"
+                  f"**{relationship_users}** users with relationship data",
+            inline=True
+        )
+        
+        # Memory stats
+        total_memories = memory_data.get('daily_memories', {})
+        recent_memories = len([m for m in total_memories.values() if m.get('timestamp', 0) > time.time() - 604800])  # Last week
+        
+        embed.add_field(
+            name="🧠 Memory System",
+            value=f"**{len(total_memories)}** total daily memories\n"
+                  f"**{recent_memories}** memories from last week\n"
+                  f"**Active** unified memory system",
+            inline=True
+        )
+        
+        # Current mood
+        try:
+            current_mood = self.learning_engine.get_daily_mood()
+            time_personality = self.learning_engine.get_time_personality()
+            
+            embed.add_field(
+                name="🎭 Current State",
+                value=f"**Mood:** {current_mood['current_mood'].title()}\n"
+                      f"**Energy:** {time_personality['energy'].title()}\n"
+                      f"**Time:** {time_personality['time_period']}\n"
+                      f"**Level:** {current_mood.get('energy_level', 0.5):.1f}/1.0",
+                inline=True
+            )
+        except Exception as e:
+            embed.add_field(
+                name="🎭 Current State",
+                value="Unable to retrieve mood data",
+                inline=True
+            )
+        
+        embed.set_footer(text="Learning system continuously adapts to user interactions")
+        await interaction.response.send_message(embed=embed)
+
+    @app_commands.command(name="ai_context", description="Show context building information")
+    @app_commands.describe()
+    async def slash_ai_context(self, interaction: discord.Interaction):
+        """Slash command version of ai_context"""
+        if not interaction.user.guild_permissions.administrator:
+            await interaction.response.send_message("❌ This command requires administrator permissions.", ephemeral=True)
+            return
+        
+        embed = discord.Embed(
+            title="🧠 AI Context System",
+            color=discord.Color.purple()
+        )
+        
+        # Context builder stats
+        try:
+            context = self.context_builder.build_smart_context(
+                user_id=interaction.user.id,
+                guild_id=interaction.guild.id,
+                current_message="test context",
+                channel_id=interaction.channel.id
+            )
+            
+            context_length = len(context)
+            
+            embed.add_field(
+                name="📝 Context Building",
+                value=f"**{context_length}** characters in current context\n"
+                      f"**Active** smart context system\n"
+                      f"**Dynamic** personality integration",
+                inline=True
+            )
+        except Exception as e:
+            embed.add_field(
+                name="📝 Context Building",
+                value="Context system active but unable to generate sample",
+                inline=True
+            )
+        
+        # Session info
+        active_sessions = len(self.gemini_chat_sessions)
+        embed.add_field(
+            name="💬 Active Sessions",
+            value=f"**{active_sessions}** active chat sessions\n"
+                  f"**{self.chat_history_limit}** message history limit per channel",
+            inline=True
+        )
+        
+        # Participation tracking
+        active_channels = len(self.participation_tracker)
+        embed.add_field(
+            name="🎭 Conversation Tracking",
+            value=f"**{active_channels}** channels being tracked\n"
+                  f"**Smart** conversation participation\n"
+                  f"**Context-aware** responses",
+            inline=True
+        )
+        
+        embed.set_footer(text="Context system builds comprehensive understanding for each interaction")
+        await interaction.response.send_message(embed=embed)
+
+    @app_commands.command(name="reset_chat", description="Reset chat session for a user")
+    @app_commands.describe(user="The user whose chat session to reset (leave empty for yourself)")
+    async def slash_reset_chat(self, interaction: discord.Interaction, user: discord.Member = None):
+        """Slash command version of reset_chat"""
+        if not user:
+            user = interaction.user
+        
+        # Only allow users to reset their own session or admins to reset anyone's
+        if user != interaction.user and not interaction.user.guild_permissions.administrator:
+            await interaction.response.send_message("❌ You can only reset your own chat session!", ephemeral=True)
+            return
+        
+        if user.id in self.gemini_chat_sessions:
+            del self.gemini_chat_sessions[user.id]
+            await interaction.response.send_message(f"✅ Reset chat session for {user.display_name}")
+        else:
+            await interaction.response.send_message(f"No active chat session found for {user.display_name}")
+
     @tasks.loop(minutes=10)
     async def save_learning_data_task(self):
         """Periodically save unified memory data"""
