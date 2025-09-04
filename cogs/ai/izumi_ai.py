@@ -598,6 +598,7 @@ class IzumiAI(commands.Cog):
         try:
             # Combine all recent messages from the user
             combined_prompt = self._combine_user_messages(recent_messages)
+            print(f"🔧 Combined conversation context:\n{combined_prompt}")
             
             if not combined_prompt:
                 combined_prompt = "hello"
@@ -641,8 +642,11 @@ class IzumiAI(commands.Cog):
                 channel_id=message.channel.id
             )
             
-            # Create full prompt with context
-            full_prompt = f"{context}\n\nUser message: {processed_prompt}"
+            # Create full prompt with proper conversation context labeling
+            if len(recent_messages) > 1:
+                full_prompt = f"{context}\n\nRecent conversation:\n{processed_prompt}\n\nPlease respond to the full conversation context above."
+            else:
+                full_prompt = f"{context}\n\nUser message: {processed_prompt}"
             
             # Generate response with fallback system
             response_text = await self._generate_response_with_fallback(
