@@ -323,16 +323,21 @@ class IzumiAI(commands.Cog):
                 if response_text and len(response_text.strip()) > 0:
                     # Split response into multiple messages if needed
                     message_parts = self._split_response_naturally(response_text)
+                    print(f"🔧 Join conversation split into {len(message_parts)} parts: {[len(part) for part in message_parts]}")
                     
                     # Send each part with appropriate delays
                     for i, part in enumerate(message_parts):
+                        print(f"🔧 Sending join part {i+1}/{len(message_parts)}: {part[:30]}...")
+                        
                         # Show typing indicator with human-like delay
                         await self._type_with_delay(message.channel, part)
                         await message.channel.send(part)
                         
                         # Brief pause between multiple messages (if more than one part)
                         if len(message_parts) > 1 and i < len(message_parts) - 1:
-                            await asyncio.sleep(random.uniform(2.0, 3.0))
+                            pause_duration = random.uniform(2.0, 3.0)
+                            print(f"🔧 Pausing {pause_duration:.1f}s between join messages...")
+                            await asyncio.sleep(pause_duration)
                     
                     print(f"✅ Successfully joined conversation: {response_text[:50]}...")
                     
@@ -467,16 +472,21 @@ class IzumiAI(commands.Cog):
             if response_text and len(response_text.strip()) > 0:
                 # Split response into multiple messages if needed
                 message_parts = self._split_response_naturally(response_text)
+                print(f"🔧 Continuation split into {len(message_parts)} parts: {[len(part) for part in message_parts]}")
                 
                 # Send each part with appropriate delays
                 for i, part in enumerate(message_parts):
+                    print(f"🔧 Sending continuation part {i+1}/{len(message_parts)}: {part[:30]}...")
+                    
                     # Show typing indicator with human-like delay
                     await self._type_with_delay(message.channel, part)
                     await message.channel.send(part)
                     
                     # Brief pause between multiple messages (if more than one part)
                     if len(message_parts) > 1 and i < len(message_parts) - 1:
-                        await asyncio.sleep(random.uniform(2.0, 3.0))
+                        pause_duration = random.uniform(2.0, 3.0)
+                        print(f"🔧 Pausing {pause_duration:.1f}s between continuation messages...")
+                        await asyncio.sleep(pause_duration)
                 
                 print(f"✅ Continued conversation: {response_text[:50]}...")
                 
@@ -648,9 +658,12 @@ class IzumiAI(commands.Cog):
             
             # Split response into multiple messages if needed
             message_parts = self._split_response_naturally(response_text)
+            print(f"🔧 Split into {len(message_parts)} parts: {[len(part) for part in message_parts]}")
             
             # Send each part with appropriate delays
             for i, part in enumerate(message_parts):
+                print(f"🔧 Sending part {i+1}/{len(message_parts)}: {part[:30]}...")
+                
                 # Show typing indicator with human-like delay
                 await self._type_with_delay(message.channel, part)
                 
@@ -663,6 +676,9 @@ class IzumiAI(commands.Cog):
                 
                 # Brief pause between multiple messages (if more than one part)
                 if len(message_parts) > 1 and i < len(message_parts) - 1:
+                    pause_duration = random.uniform(2.0, 3.0)
+                    print(f"🔧 Pausing {pause_duration:.1f}s between messages...")
+                    await asyncio.sleep(pause_duration)
                     await asyncio.sleep(random.uniform(2.0, 3.0))
             
             # Track that Izumi is now participating in this conversation
