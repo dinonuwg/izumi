@@ -658,9 +658,9 @@ class IzumiAI(commands.Cog):
         
         # Mark that we're about to respond to this user
         self.recent_responses[user_id] = current_time
-        
-        # Wait 5 seconds to collect any follow-up messages from the same user
-        await asyncio.sleep(5)
+
+        # Wait 4 seconds to collect any follow-up messages from the same user
+        await asyncio.sleep(4)
         
         # Collect recent messages from the same user in the last 10 seconds
         recent_messages = await self._collect_recent_user_messages(message)
@@ -764,7 +764,6 @@ class IzumiAI(commands.Cog):
                     pause_duration = random.uniform(2.0, 3.0)
                     print(f"🔧 Pausing {pause_duration:.1f}s between messages...")
                     await asyncio.sleep(pause_duration)
-                    await asyncio.sleep(random.uniform(2.0, 3.0))
             
             # Track that Izumi is now participating in this conversation
             self.participation_tracker[message.channel.id] = {
@@ -968,9 +967,9 @@ class IzumiAI(commands.Cog):
         
         if not text:
             return 1.0
-        
-        # Base calculation: 80 WPM = ~400 characters per minute = ~6.67 characters per second
-        base_chars_per_second = 6.67
+
+        # Base calculation: 80 WPM = ~400 characters per minute = ~10 characters per second
+        base_chars_per_second = 10
         
         # Get Izumi's current mood and time personality from unified memory
         try:
@@ -988,8 +987,8 @@ class IzumiAI(commands.Cog):
             "energetic": 0.75,    # 25% faster - quick energetic typing
             "excited": 0.70,      # 30% faster - very quick when excited
             "playful": 0.85,      # 15% faster - still quick but thoughtful
-            "thoughtful": 1.25,   # 25% slower - pauses to think
-            "sleepy": 1.50        # 50% slower - tired and sluggish
+            "thoughtful": 1.15,   # 15% slower - pauses to think
+            "sleepy": 1.25        # 50% slower - tired and sluggish
         }
         
         mood_multiplier = mood_multipliers.get(mood_data['current_mood'], 1.0)
