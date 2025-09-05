@@ -47,9 +47,29 @@ case "$1" in
         ;;
     backup)
         echo "💾 Creating backup..."
+        
+        # Create backup directory if it doesn't exist
+        backup_dir="/opt/$BOT_NAME/backups"
+        mkdir -p "$backup_dir"
+        
         timestamp=$(date +%Y%m%d_%H%M%S)
-        tar -czf "/tmp/$BOT_NAME-backup-$timestamp.tar.gz" -C /opt/$BOT_NAME data/ .env
-        echo "✅ Backup created: /tmp/$BOT_NAME-backup-$timestamp.tar.gz"
+        backup_file="$backup_dir/$BOT_NAME-backup-$timestamp.tar.gz"
+        
+        # Create backup archive
+        tar -czf "$backup_file" -C /opt/$BOT_NAME data/ .env
+        
+        echo "✅ Backup created: $backup_file"
+        
+        # Show backup info
+        backup_size=$(du -h "$backup_file" | cut -f1)
+        echo "📊 Backup size: $backup_size"
+        
+        # Optional: Clean up old backups (keep last 50)
+        backup_count=$(ls -1 "$backup_dir"/*.tar.gz 2>/dev/null | wc -l)
+        if [ "$backup_count" -gt 50 ]; then
+            echo "🧹 Cleaning up old backups (keeping 50 most recent)..."
+            ls -t "$backup_dir"/*.tar.gz | tail -n +51 | xargs rm -f
+        fi
         ;;
     *)
         echo "🤖 Discord Bot Management Script"
