@@ -1,120 +1,125 @@
-# 🌸 Izumi Bot 
+---
 
-hey there! welcome to my lil discord bot project~ this is izumi, and she's honestly pretty awesome if i do say so myself 😎
+# Izumi
 
-## ✨ what she does
+Izumi is a Discord bot that mixes useful server tools with various osu features. 
 
-izumi is basically ur new bestie who lives in discord and does tons of cool stuff:
+---
+## Features
 
-- **💬 ai chat** - she's got gemini ai powering her brain so she can have actual convos with u and remember stuff about everyone
-- **🎮 osu! gacha** - collect trading cards of top osu! players, open crates, daily rewards, the whole shebang
-- **📊 leveling system** - gain xp from chatting, level up, get roles automatically  
-- **🎂 birthday tracking** - she'll remember when it's ur bday and wish u happy birthday!
-- **⚖️ moderation tools** - warnings, timeouts, all that mod stuff
-- **🎉 social commands** - hugs, headpats, all the wholesome interaction commands
-- **📝 reminders** - set reminders and she'll ping u later
+* AI chat powered by Google Gemini
 
-## 🚀 getting started
+![Screenshot](example_images/chatbot.jpg)
 
-### what u need first:
-- python 3.8+ (i use 3.12 but anything recent should work)
-- a discord bot token from [discord developer portal](https://discord.com/developers/applications)
-- gemini ai api key from [google ai studio](https://aistudio.google.com/) 
-- osu! api credentials from [osu! settings](https://osu.ppy.sh/home/account/edit) (optional, only if u want gacha features)
+* osu! Gacha 
 
-### quick setup:
+![Screenshot](example_images/gacha.jpg)
 
-1. **clone this bad boy:**
-   ```bash
-   git clone https://github.com/dinonuwg/izumi.git
-   cd izumi
-   ```
+* Leveling System
 
-2. **install the requirements:**
-   ```bash
-   pip install -r requirements.txt
-   ```
+![Screenshot](example_images/level.jpg)
 
-3. **setup ur environment:**
-   - copy `.env.template` to `.env`
-   - fill in all ur api keys and tokens
-   - make sure to set BOT_OWNER_ID to ur discord user id for admin commands
+* Moderation tools
 
-4. **run it:**
-   ```bash
-   python bot.py
-   ```
+![Screenshot](example_images/moderation.jpg)
 
-that's it! she should boot up and be ready to go ✨
+* Several Social commands
 
-## 🔧 configuration 
+![Screenshot](example_images/social.jpg)
 
-everything important goes in the `.env` file:
+and many more additional features.
+
+---
+
+## 
+
+### Requirements
+
+* Python 3.8+ 
+* Discord bot token → [Developer Portal](https://discord.com/developers/applications)
+* Gemini API key → [Google AI Studio](https://aistudio.google.com/)
+* *(Optional)* osu! API credentials → [osu! settings](https://osu.ppy.sh/home/account/edit)
+
+### Install
+
+```bash
+git clone https://github.com/dinonuwg/izumi.git
+cd izumi
+pip install -r requirements.txt
+```
+
+### Configure
+
+1. Copy `.env.template` → `.env`
+2. Add your tokens and keys
+3. Set `BOT_OWNER_ID` to your Discord user ID
+
+Example:
 
 ```env
-# required stuff
-DISCORD_TOKEN=ur_bot_token_here
-GEMINI_API_KEY=ur_gemini_key_here  
-BOT_OWNER_ID=ur_discord_user_id
+DISCORD_TOKEN=your_token
+GEMINI_API_KEY=your_gemini_key
+BOT_OWNER_ID=your_id
 
-# optional osu! features
-OSU_CLIENT_ID=ur_osu_client_id
-OSU_CLIENT_SECRET=ur_osu_secret
+# Optional for osu! gacha
+OSU_CLIENT_ID=your_osu_id
+OSU_CLIENT_SECRET=your_osu_secret
 
-# other optional stuff
-LOG_LEVEL=INFO
 COMMAND_PREFIX=!
+LOG_LEVEL=INFO
 ```
 
-## 📁 how it's organized
+### Run
 
-```
-├── bot.py                 # main bot file, where the magic happens
-├── cogs/                  # all the feature modules
-│   ├── ai/               # ai chat system and memory management  
-│   ├── moderation/       # mod tools, leveling, birthdays, etc
-│   └── osugacha/         # osu! gacha card collection system
-├── data/                 # json files where everything gets saved
-├── utils/                # helper functions and config stuff
-└── requirements.txt      # all the python packages u need
+```bash
+python bot.py
 ```
 
-## 🌟 cool features
+---
 
-### ai system
-izumi uses google's gemini ai and has a pretty sophisticated memory system. she remembers conversations, learns about server members, and builds up her own personality over time. it's honestly kinda wild how natural she feels to talk to
+## Project Structure
 
-### osu! gacha  
-this is probably the most complex part - it's a full trading card game using the osu! api. collect cards of top players, open different crate types, complete achievements, daily rewards, the whole mobile game experience but in discord lol
+```
+├── bot.py          # Main bot entry
+├── cogs/           # Features (AI, moderation, osu! gacha)
+├── data/           # JSON storage
+├── utils/          # Helpers/config
+└── requirements.txt
+```
 
-### leveling & roles
-automatic xp from chatting, configurable level roles, birthday notifications - all the community building stuff u want in a server
+---
 
-## 🛠️ development
+## Deployment
 
-the code is pretty modular so adding new features is ez. each major system is its own cog, and there's a unified memory system that lets different parts of the bot share data about users.
+Scripts are included for both Windows and Linux servers.
 
-if u wanna contribute or modify stuff, the main areas are:
-- `bot.py` - core bot logic and startup
-- `cogs/ai/` - ai personality and memory system  
-- `cogs/osugacha/` - gacha game logic
-- `utils/` - shared helper functions
+**Windows**
 
-## 🌐 server deployment
+* `win_setup.bat` – setup
+* `win_run_bot.bat` – run the bot
+* `win_transfer_helper.bat` – transfer files to Linux
 
-included are some scripts for easy deployment:
+**Linux**
 
-**Windows Scripts:**
-- `win_setup.bat` - quick setup for Windows development
-- `win_run_bot.bat` - run the bot on Windows
-- `win_transfer_helper.bat` - help transfer files to Linux server
+* `linux_server_setup.sh` – Ubuntu setup with systemd
+* `linux_manage_bot.sh` – manage the bot as a service
+* `win_to_linux_transfer.sh` – transfer helper
 
-**Linux Server Scripts:**
-- `linux_server_setup.sh` - complete Ubuntu server setup with systemd service
-- `linux_manage_bot.sh` - easy service management commands  
-- `win_to_linux_transfer.sh` - transfer from Windows/Mac to Linux server
-- automatic startup, logging, and error recovery
+Includes automatic startup, logging, and recovery.
 
-## 💝 credits & thanks
+---
 
-shoutout to the discord.py team for the amazing library, google for gemini ai, and peppy for the osu! api. also thanks to everyone who helped test this thing and gave feedback !
+## Contributing
+
+The bot is modular, so adding features is straightforward. Fork it, open issues, or submit pull requests.
+
+---
+
+## Credits to
+
+* [discord.py](https://github.com/Rapptz/discord.py)
+* [Google Gemini AI](https://aistudio.google.com/)
+* [osu! API](https://osu.ppy.sh/)
+* Everyone who tested and gave feedback
+
+---
