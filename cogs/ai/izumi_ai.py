@@ -850,8 +850,8 @@ class IzumiAI(commands.Cog):
         return response
 
     def _split_response_naturally(self, response: str) -> list:
-        """Split response into natural message chunks like casual typing (30-60 chars per message)"""
-        import random
+        """Split response at natural speech boundaries - complete sentences and natural pauses"""
+        import re
         
         # Debug logging
         print(f"🔧 Splitting response (length: {len(response)}): {response[:100]}...")
@@ -861,85 +861,138 @@ class IzumiAI(commands.Cog):
             pre_split_parts = [part.strip() for part in response.split('|SPLIT|') if part.strip()]
             print(f"🔧 Found {len(pre_split_parts)} pre-split parts from newlines")
             
-            # If we have multiple parts from newlines, split each one naturally if needed
+            # Each newline-separated part should be its own message
             final_parts = []
             for part in pre_split_parts:
-                if len(part) <= 60:  # Keep short parts as-is
-                    final_parts.append(part)
-                else:
-                    # Split longer parts naturally
-                    sub_parts = self._split_long_text_naturally(part)
+                # Only split further if the part is extremely long (over 150 chars)
+                if len(part) > 150:
+                    sub_parts = self._split_long_text_at_sentences(part)
                     final_parts.extend(sub_parts)
+                else:
+                    final_parts.append(part)
             return final_parts
         
-        # Always keep very short messages as single (under 35 characters)
-        if len(response) < 35:
-            print(f"🔧 Keeping very short message as single")
-            return [response]
-        
-        # Split into casual typing chunks (30-60 characters each)
-        return self._split_long_text_naturally(response)
+        # For regular responses, split at sentence boundaries
+        return self._split_long_text_at_sentences(response)
     
-    def _split_long_text_naturally(self, text: str) -> list:
-        """Split long text into casual typing chunks (30-60 chars each)"""
-        import random
+    def _split_long_text_at_sentences(self, text: str) -> list:
+        """Split text at natural sentence boundaries and speech pauses"""
+        import re
         
-        print(f"🔧 Splitting into casual typing chunks (30-60 chars each)...")
+        text = text.strip()
+        if not text:
+            return []
+        
+        # Keep short messages intact (under 100 characters)
+        if len(text) <= 100:
+            print(f"🔧 Keeping short message intact")
+            return [text]
         
         parts = []
-        remaining_text = text.strip()
         
-        while remaining_text:
-            # Random target length between 30-60 characters
-            target_length = random.randint(30, 60)
-            
-            # If remaining text is short enough, just use it all
-            if len(remaining_text) <= target_length + 15:  # +15 to avoid tiny leftover chunks
-                parts.append(remaining_text.strip())
-                break
-            
-            # Find the best split point within our target range
-            # Prefer splitting at natural points: punctuation, then spaces
-            split_points = ['! ', '? ', '. ', ', ', '; ', ': ', ' and ', ' but ', ' so ', ' - ']
-            best_split = None
-            best_distance = float('inf')
-            
-            # Look for punctuation split points first
-            for split_point in split_points:
-                idx = remaining_text.find(split_point, 20)  # Start looking after 20 chars
-                if idx != -1 and 25 <= idx + len(split_point) <= 65:  # Within reasonable range
-                    distance = abs(idx + len(split_point) - target_length)
-                    if distance < best_distance:
-                        best_distance = distance
-                        best_split = idx + len(split_point)
-            
-            # If no good punctuation split, find the best space
-            if best_split is None:
-                # Look for spaces around our target length
-                for i in range(max(25, target_length - 15), min(len(remaining_text), target_length + 15)):
-                    if remaining_text[i] == ' ':
-                        distance = abs(i - target_length)
-                        if distance < best_distance:
-                            best_distance = distance
-                            best_split = i + 1  # Split after the space
-            
-            # If still no good split point, just split at target length
-            if best_split is None:
-                best_split = min(target_length, len(remaining_text))
-            
-            # Extract this part and continue with the rest
-            current_part = remaining_text[:best_split].strip()
-            if current_part:
-                parts.append(current_part)
-            
-            remaining_text = remaining_text[best_split:].strip()
+        # Primary split points (complete sentences)
+        # Split on sentence endings followed by space/start of new sentence
+        sentence_pattern = r'([.!?]+)\s+(?=[A-Z]|[a-z])'
+        sentences = re.split(sentence_pattern, text)
         
-        # Remove any empty parts
-        parts = [part for part in parts if part.strip()]
+        # Recombine sentences with their punctuation
+        current_part = ""
+        for i in range(0, len(sentences), 2):
+            sentence = sentences[i]
+            punctuation = sentences[i + 1] if i + 1 < len(sentences) else ""
+            
+            full_sentence = sentence + punctuation
+            
+            # If adding this sentence would make the part too long, save current part
+            if current_part and len(current_part + " " + full_sentence) > 120:
+                if current_part.strip():
+                    parts.append(current_part.strip())
+                current_part = full_sentence
+            else:
+                # Add to current part
+                if current_part:
+                    current_part += " " + full_sentence
+                else:
+                    current_part = full_sentence
         
-        print(f"🔧 Successfully split into {len(parts)} casual chunks")
+        # Add any remaining text
+        if current_part.strip():
+            parts.append(current_part.strip())
+        
+        # If we didn't get good sentence splits (like one very long sentence), 
+        # fall back to natural pause points
+        if len(parts) == 1 and len(parts[0]) > 120:
+            parts = self._split_at_natural_pauses(parts[0])
+        
+        # Clean up and validate
+        parts = [part.strip() for part in parts if part.strip()]
+        
+        print(f"🔧 Split into {len(parts)} natural parts at sentence boundaries")
         part_lengths = [len(part) for part in parts]
-        print(f"🔧 Split result: {len(parts)} parts - {part_lengths}")
+        print(f"🔧 Part lengths: {part_lengths}")
+        
+        return parts if parts else [text]
+    
+    def _split_at_natural_pauses(self, text: str) -> list:
+        """Split at natural speech pauses when sentence splitting fails"""
+        
+        # Natural pause points in order of preference
+        pause_points = [
+            r',\s+(?=and\s)',     # ", and"
+            r',\s+(?=but\s)',     # ", but" 
+            r',\s+(?=so\s)',      # ", so"
+            r',\s+(?=or\s)',      # ", or"
+            r',\s+(?=because\s)', # ", because"
+            r',\s+(?=while\s)',   # ", while"
+            r',\s+(?=when\s)',    # ", when"
+            r',\s+(?=if\s)',      # ", if"
+            r',\s+(?=since\s)',   # ", since"
+            r';\s+',              # semicolons
+            r':\s+',              # colons
+            r'\s+--\s+',          # em dashes
+            r'\s+-\s+',           # regular dashes with spaces
+            r',\s+',              # any comma with space
+        ]
+        
+        parts = []
+        remaining = text.strip()
+        
+        while remaining and len(remaining) > 100:
+            best_split = None
+            best_position = 0
+            
+            # Find the best pause point around the middle of remaining text
+            target_position = len(remaining) // 2
+            
+            for pattern in pause_points:
+                import re
+                matches = list(re.finditer(pattern, remaining))
+                
+                for match in matches:
+                    position = match.end()
+                    # Prefer splits closer to the middle, but not too early or late
+                    if 50 <= position <= len(remaining) - 30:
+                        distance_from_target = abs(position - target_position)
+                        if best_split is None or distance_from_target < abs(best_position - target_position):
+                            best_split = pattern
+                            best_position = position
+                
+                # If we found a good split with this pattern, use it
+                if best_split:
+                    break
+            
+            if best_split:
+                part = remaining[:best_position].strip()
+                if part:
+                    parts.append(part)
+                remaining = remaining[best_position:].strip()
+            else:
+                # No good pause point found, just break
+                break
+        
+        # Add any remaining text
+        if remaining.strip():
+            parts.append(remaining.strip())
         
         return parts if parts else [text]
 
