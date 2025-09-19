@@ -1955,6 +1955,13 @@ class OsuGachaHandlers:
                     else:
                         await message.edit(embed=embed)
                     return
+                else:
+                    # Flashback player found, update message
+                    if not hasattr(ctx, 'response') and 'message' in locals():
+                        try:
+                            await message.edit(content="✅ Player found!")
+                        except:
+                            pass  # Don't fail if message edit fails
             else:
                 # Regular player search (non-flashback mutations)
                 player = await self.gacha_system.search_player_preview(search)
@@ -1973,6 +1980,13 @@ class OsuGachaHandlers:
                     else:
                         await message.edit(embed=embed)
                     return
+
+            # Update message to show player found (if we have a message to update)
+            if player and not hasattr(ctx, 'response') and 'message' in locals():
+                try:
+                    await message.edit(content="✅ Player found!")
+                except:
+                    pass  # Don't fail if message edit fails
 
             if not player:
                 embed = discord.Embed(
