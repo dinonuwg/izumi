@@ -311,6 +311,44 @@ class OsuGachaSystem:
         finally:
             # Always reset the building flag
             self._cache_building = False
+        
+    async def _ensure_cache_is_valid(self):
+        """Automatically rebuild cache if it's outdated (silent background rebuild)"""
+        try:
+            # Check if cache is expired
+            cache_age = time.time() - self.leaderboard_cache_time
+            
+            # If cache is outdated and not currently rebuilding
+            if cache_age >= self.leaderboard_cache_duration and not self._cache_building:
+                print(f"🔄 Cache expired ({cache_age/3600:.1f}h old), rebuilding automatically...")
+                
+                # Set flag to prevent concurrent rebuilds
+                self._cache_building = True
+                
+                try:
+                    # Silent rebuild without user messages
+                    leaderboard = await self.build_leaderboard_cache()
+                    
+                    if leaderboard and len(leaderboard) > 0:
+                        self.leaderboard_cache = leaderboard
+                        self.leaderboard_cache_time = time.time()
+                        self._save_cache_to_disk()
+                        print(f"✅ Auto-rebuild complete! Cached {len(leaderboard)} players")
+                    else:
+                        print("⚠️ Auto-rebuild failed - no data received")
+                        
+                except Exception as e:
+                    print(f"❌ Auto-rebuild error: {e}")
+                    
+                finally:
+                    self._cache_building = False
+                    
+        except Exception as e:
+            print(f"Error in cache validation: {e}")
+        
+        finally:
+            # Always reset the building flag
+            self._cache_building = False
 
     async def get_player_by_rank_with_retry(self, rank, retries=3):
         """Get player by rank with retry logic"""
@@ -325,14 +363,22 @@ class OsuGachaSystem:
 
     async def get_player_by_rank(self, rank, ctx=None):
         """Get player by specific rank from cache or API - OPTIMIZED"""
+        # Ensure cache is valid (auto-rebuild if needed)
+        await self._ensure_cache_is_valid()
+        
         # Try optimized cache lookup first
         player = self.get_player_from_cache_optimized(rank=rank)
         if player:
             return player
         
-        # If not in cache, build it and try again - FIX: use leaderboard_cache_time
-        if not self.leaderboard_cache or time.time() - self.leaderboard_cache_time > 3600:
-            await self.build_leaderboard_cache_with_retry(retries=3, ctx=ctx)
+        # If still not in cache and user is waiting, show rebuild message
+        if not self.leaderboard_cache or len(self.leaderboard_cache) < 500:
+            if ctx:
+                # Only show message to users who are actively waiting
+                await self.build_leaderboard_cache_with_retry(retries=3, ctx=ctx)
+            else:
+                # Silent rebuild if no user context
+                await self.build_leaderboard_cache_with_retry(retries=3, ctx=None)
         
         # Try optimized lookup again
         player = self.get_player_from_cache_optimized(rank=rank)
@@ -397,6 +443,10 @@ class OsuGachaSystem:
 
     async def get_random_player_from_range(self, min_rank, max_rank):
         """Get random player from rank range"""
+        # Ensure cache is valid (auto-rebuild if needed)
+        await self._ensure_cache_is_valid()
+        
+        # If still no cache, rebuild with retry (silent)
         if not self.leaderboard_cache:
             await self.build_leaderboard_cache_with_retry()
         
@@ -1112,18 +1162,21 @@ class OsuGachaSystem:
     async def search_player_preview(self, search):
         """Search for a player in the top 10k for preview"""
         try:
+            # Check if cache needs rebuilding (automatic rebuild)
+            await self._ensure_cache_is_valid()
+            
             # Try by rank number first
             if search.isdigit():
                 rank = int(search)
                 if 1 <= rank <= 10000:
                     # Find player by rank in cached data
-                    for player in self.leaderboard_cache:  # Changed from self.leaderboard
+                    for player in self.leaderboard_cache:
                         if player['rank'] == rank:
                             return player
             
             # Search by username
             search_lower = search.lower()
-            for player in self.leaderboard_cache:  # Changed from self.leaderboard
+            for player in self.leaderboard_cache:
                 if search_lower in player['username'].lower():
                     return player
             
