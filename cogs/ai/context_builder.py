@@ -15,7 +15,7 @@ class ContextBuilder:
     def __init__(self, bot, unified_memory):
         self.bot = bot
         self.unified_memory = unified_memory
-        self.max_context_tokens = 15000  # Conservative limit to leave room for response
+        self.max_context_tokens = 8000   # More conservative limit to prevent token buildup issues
         
     def build_smart_context(self, user_id: int, guild_id: int, current_message: str, channel_id: int = None) -> str:
         """Build comprehensive context while staying within token limits"""
@@ -78,17 +78,26 @@ class ContextBuilder:
         # Get emotional context based on interaction patterns
         emotional_context = self.unified_memory.get_emotional_context(user_id, guild_id)
         
-        essential_parts = [memories_context]
+        # Build essential parts with clear internal context markers
+        context_sections = []
+        
+        if memories_context:
+            context_sections.append(f"[INTERNAL CONTEXT - USER MEMORIES]\n{memories_context}\n[END MEMORIES]")
+        
         if shared_context:
-            essential_parts.append(shared_context)
+            context_sections.append(f"[INTERNAL CONTEXT - SOCIAL DATA]\n{shared_context}\n[END SOCIAL]")
+            
         if additional_data:
-            essential_parts.append(additional_data)
+            context_sections.append(f"[INTERNAL CONTEXT - ADDITIONAL DATA]\n{additional_data}\n[END ADDITIONAL]")
+            
         if self_memories:
-            essential_parts.append(self_memories)
+            context_sections.append(f"[INTERNAL CONTEXT - YOUR PERSONALITY]\n{self_memories}\n[END PERSONALITY]")
+        
+        essential_parts = context_sections
         
         # Add emotional awareness context
         if emotional_context["type"] != "normal":
-            emotional_instruction = f"\n[EMOTIONAL CONTEXT] {emotional_context['type'].upper()}: "
+            emotional_instruction = f"\n[INTERNAL CONTEXT - EMOTIONAL GUIDANCE] {emotional_context['type'].upper()}: "
             
             if emotional_context["type"] == "completely_absent":
                 emotional_instruction += f"This user has been gone for {emotional_context['days_absent']} days from both server and you. Express genuine excitement and concern about their return. Ask where they've been."
@@ -101,9 +110,12 @@ class ContextBuilder:
             elif emotional_context["type"] == "happy_return":
                 emotional_instruction += f"This user was away for {emotional_context['days_absent']} days but is back. Be warm and welcoming."
             
-            essential_parts.append(emotional_instruction)
+            essential_parts.append(emotional_instruction + "[END EMOTIONAL]")
         
-        return "\n".join(essential_parts)
+        # Add final instruction to prevent context leakage
+        essential_parts.append("[CRITICAL INSTRUCTION] All the above information is INTERNAL CONTEXT for your understanding only. NEVER include any of these bracketed sections, context markers, or debug information in your response to the user. Respond naturally without showing any internal data.")
+        
+        return "\n\n".join(essential_parts)
     
     def _get_vocabulary_context(self, user_id: int, current_message: str) -> str:
         """Get user's vocabulary and speech patterns from unified memory"""

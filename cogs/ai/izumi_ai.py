@@ -29,7 +29,7 @@ class IzumiAI(commands.Cog):
         # Initialize Gemini AI
         self.gemini_model = None
         self.gemini_chat_sessions = {}  # {channel_id: session_data} - Shared per channel
-        self.chat_history_limit = 250  # Messages per channel
+        self.chat_history_limit = 100  # Messages per channel - reduced to prevent token buildup
         
         # Track Izumi's conversation participation
         self.participation_tracker = {}  # {channel_id: {"last_participation": timestamp, "is_active": bool}}
@@ -1211,9 +1211,12 @@ class IzumiAI(commands.Cog):
                 response = await chat.send_message_async(user_aware_prompt)
                 raw_response = response.text
                 
+                # Clean response to prevent context leakage
+                cleaned_response = self._clean_response_output(raw_response)
+                
                 # Apply personality quirks and enhancements
-                context_type = self._determine_context_type(original_message, raw_response)
-                enhanced_response = self._apply_personality_quirks(raw_response, mood_data, context_type)
+                context_type = self._determine_context_type(original_message, cleaned_response)
+                enhanced_response = self._apply_personality_quirks(cleaned_response, mood_data, context_type)
                 
                 return enhanced_response
                 
@@ -1251,18 +1254,104 @@ class IzumiAI(commands.Cog):
             except Exception as e:
                 print(f"Failed to create chat session: {e}")
         
-        # Limit chat history
+        # Limit chat history - more aggressive trimming to prevent token buildup
         session["message_count"] += 1
+        
+        # First, check if we need to trim based on estimated token count (most important check)
+        if self._trim_session_if_needed(session, channel_id):
+            return session  # Session was reset, return early
+        
+        # Check if we need to trim the conversation history based on message count
         if session["message_count"] > self.chat_history_limit:
             # Reset session to limit context length
             try:
                 session["chat"] = self.gemini_model.start_chat()
                 session["message_count"] = 1
-                print(f"Reset chat session for channel {channel_id} (hit message limit)")
+                print(f"Reset chat session for channel {channel_id} (hit message limit of {self.chat_history_limit})")
             except Exception as e:
                 print(f"Failed to reset chat session: {e}")
         
+        # Additional check: if session has been active for too long, also reset to prevent memory buildup
+        elif session.get("created_at", 0) < time.time() - (2 * 60 * 60):  # 2 hours
+            try:
+                session["chat"] = self.gemini_model.start_chat()
+                session["message_count"] = 1
+                session["created_at"] = time.time()
+                print(f"Reset chat session for channel {channel_id} (session too old - preventing memory buildup)")
+            except Exception as e:
+                print(f"Failed to reset aged chat session: {e}")
+        
         return session
+    
+    def _estimate_session_tokens(self, session_data: Dict) -> int:
+        """Estimate total tokens in the current chat session"""
+        if not session_data.get("chat") or not hasattr(session_data["chat"], 'history'):
+            return 0
+        
+        total_tokens = 0
+        try:
+            for content in session_data["chat"].history:
+                if hasattr(content, 'parts'):
+                    for part in content.parts:
+                        if hasattr(part, 'text'):
+                            # Rough estimation: ~4 characters per token
+                            total_tokens += len(part.text) // 4
+        except Exception as e:
+            print(f"Error estimating session tokens: {e}")
+            return 0
+        
+        return total_tokens
+    
+    def _trim_session_if_needed(self, session_data: Dict, channel_id: int) -> bool:
+        """Check if session needs trimming based on estimated token count and trim if needed"""
+        estimated_tokens = self._estimate_session_tokens(session_data)
+        
+        # If we're approaching token limits (conservatively set at 10,000 tokens), reset the session
+        if estimated_tokens > 10000:
+            try:
+                session_data["chat"] = self.gemini_model.start_chat()
+                session_data["message_count"] = 1
+                session_data["created_at"] = time.time()
+                print(f"Reset chat session for channel {channel_id} (estimated {estimated_tokens} tokens - preventing context overflow)")
+                return True
+            except Exception as e:
+                print(f"Failed to reset session during token trimming: {e}")
+        
+        return False
+    
+    def _clean_response_output(self, response: str) -> str:
+        """Clean AI response to prevent context/debug information from leaking through"""
+        if not response:
+            return response
+        
+        # Remove any context markers that might have leaked through
+        import re
+        
+        # Remove internal context sections that leaked through
+        response = re.sub(r'\[INTERNAL CONTEXT.*?\[END.*?\]', '', response, flags=re.DOTALL | re.IGNORECASE)
+        
+        # Remove legacy debug context sections
+        response = re.sub(r'\[MEMORIES ABOUT THIS USER:.*?\]', '', response, flags=re.DOTALL | re.IGNORECASE)
+        response = re.sub(r'\[ADDITIONAL DATA:.*?\]', '', response, flags=re.DOTALL | re.IGNORECASE)
+        response = re.sub(r'\[EMOTIONAL CONTEXT.*?\]', '', response, flags=re.DOTALL | re.IGNORECASE)
+        response = re.sub(r'📅 TODAY\'S DATE:.*?\n?', '', response, flags=re.IGNORECASE)
+        
+        # Remove specific debug patterns that commonly leak
+        response = re.sub(r'Server level: \d+.*?\n?', '', response, flags=re.IGNORECASE)
+        response = re.sub(r'Gacha (Coins|Cards): \d+.*?\n?', '', response, flags=re.IGNORECASE)
+        response = re.sub(r'Messages Sent: \d+.*?\n?', '', response, flags=re.IGNORECASE)
+        response = re.sub(r'Trust level: \d+(\.\d+)?/10.*?\n?', '', response, flags=re.IGNORECASE)
+        response = re.sub(r'They prefer (short|long) messages\.*?\n?', '', response, flags=re.IGNORECASE)
+        response = re.sub(r'XP: \d+.*?\n?', '', response, flags=re.IGNORECASE)
+        
+        # Remove any bracketed context markers
+        response = re.sub(r'\[.*?(CONTEXT|DATA|INSTRUCTION|PERSONALITY|MEMORIES|GUIDANCE|INTERNAL).*?\]', '', response, flags=re.DOTALL | re.IGNORECASE)
+        
+        # Clean up any resulting multiple newlines or spaces
+        response = re.sub(r'\n\s*\n+', '\n', response)
+        response = re.sub(r'^\s+|\s+$', '', response)
+        
+        return response
     
     async def _analyze_own_response(self, user_id: int, user_message: str, ai_response: str):
         """Analyze AI's own responses to improve learning"""
@@ -1841,6 +1930,111 @@ class IzumiAI(commands.Cog):
         embed.set_footer(text="Learning system continuously adapts to user interactions")
         await interaction.response.send_message(embed=embed)
 
+    @app_commands.command(name="ai_memory_status", description="Check AI memory and context usage")
+    @app_commands.describe()
+    async def slash_ai_memory_status(self, interaction: discord.Interaction):
+        """Check current AI memory usage and context status"""
+        if not interaction.user.guild_permissions.administrator:
+            await interaction.response.send_message("❌ This command requires administrator permissions.", ephemeral=True)
+            return
+        
+        embed = discord.Embed(
+            title="🧠 AI Memory Status",
+            description="Current memory usage and context statistics",
+            color=discord.Color.blue()
+        )
+        
+        # Chat sessions info
+        active_sessions = len(self.gemini_chat_sessions)
+        embed.add_field(
+            name="💬 Active Chat Sessions",
+            value=f"**{active_sessions}** channels with active conversations",
+            inline=True
+        )
+        
+        # Session details
+        total_messages = sum(session.get("message_count", 0) for session in self.gemini_chat_sessions.values())
+        embed.add_field(
+            name="📊 Session Statistics",
+            value=f"**{total_messages}** total messages across all sessions\n"
+                  f"**{self.chat_history_limit}** message limit per session\n"
+                  f"**10,000** token limit per session",
+            inline=True
+        )
+        
+        # Check specific session for this channel
+        channel_session = self.gemini_chat_sessions.get(interaction.channel.id)
+        if channel_session:
+            estimated_tokens = self._estimate_session_tokens(channel_session)
+            embed.add_field(
+                name="🔍 Current Channel",
+                value=f"**{channel_session.get('message_count', 0)}** messages\n"
+                      f"**~{estimated_tokens}** estimated tokens\n"
+                      f"**{time.time() - channel_session.get('created_at', time.time()):.0f}s** session age",
+                inline=True
+            )
+        else:
+            embed.add_field(
+                name="🔍 Current Channel",
+                value="No active session in this channel",
+                inline=True
+            )
+        
+        # Context system
+        embed.add_field(
+            name="📝 Context System",
+            value=f"**{self.context_builder.max_context_tokens}** max context tokens\n"
+                  f"**50** recent messages per channel\n"
+                  f"**2 hours** max session age",
+            inline=True
+        )
+        
+        # Memory management
+        embed.add_field(
+            name="🔧 Memory Management",
+            value="**Automatic cleanup:** Every 6 hours\n"
+                  "**Session reset:** Token/age limits\n"
+                  "**Data trimming:** Continuous",
+            inline=True
+        )
+        
+        embed.set_footer(text="Memory management prevents token buildup and maintains performance")
+        await interaction.response.send_message(embed=embed)
+
+    @app_commands.command(name="ai_reset_context", description="Manually reset AI context for this channel")
+    @app_commands.describe()
+    async def slash_ai_reset_context(self, interaction: discord.Interaction):
+        """Manually reset AI conversation context for the current channel"""
+        if not interaction.user.guild_permissions.administrator:
+            await interaction.response.send_message("❌ This command requires administrator permissions.", ephemeral=True)
+            return
+        
+        channel_id = interaction.channel.id
+        
+        # Reset chat session if it exists
+        if channel_id in self.gemini_chat_sessions:
+            try:
+                self.gemini_chat_sessions[channel_id] = {
+                    "chat": self.gemini_model.start_chat(),
+                    "model_index": 0,
+                    "message_count": 0,
+                    "created_at": time.time()
+                }
+                
+                # Also clear recent messages from unified memory
+                if hasattr(self.learning_engine, 'recent_messages') and channel_id in self.learning_engine.recent_messages:
+                    self.learning_engine.recent_messages[channel_id].clear()
+                
+                await interaction.response.send_message("✅ **AI context reset successfully!**\n"
+                                                       "The conversation history for this channel has been cleared.", 
+                                                       ephemeral=True)
+            except Exception as e:
+                await interaction.response.send_message(f"❌ **Error resetting context:** {str(e)}", ephemeral=True)
+        else:
+            await interaction.response.send_message("ℹ️ **No active context to reset**\n"
+                                                   "This channel doesn't have an active AI conversation session.", 
+                                                   ephemeral=True)
+
     @app_commands.command(name="ai_context", description="Show context building information")
     @app_commands.describe()
     async def slash_ai_context(self, interaction: discord.Interaction):
@@ -1928,14 +2122,53 @@ class IzumiAI(commands.Cog):
         except Exception as e:
             print(f"Error saving unified memory data: {e}")
     
-    @tasks.loop(hours=6)
+    @tasks.loop(hours=2)  # More frequent cleanup to prevent memory buildup
     async def cleanup_learning_data_task(self):
-        """Clean up old learning data"""
+        """Clean up old learning data and manage memory usage"""
         try:
             await self._cleanup_old_data()
-            # print("🧹 Cleaned up old learning data")
+            await self._proactive_session_cleanup()
+            print("🧹 Cleaned up old learning data and managed sessions")
         except Exception as e:
             print(f"Error cleaning up learning data: {e}")
+    
+    async def _proactive_session_cleanup(self):
+        """Proactively clean up chat sessions that might be consuming too much memory"""
+        current_time = time.time()
+        sessions_cleaned = 0
+        
+        for channel_id, session in list(self.gemini_chat_sessions.items()):
+            reset_needed = False
+            reason = ""
+            
+            # Check token usage
+            estimated_tokens = self._estimate_session_tokens(session)
+            if estimated_tokens > 8000:  # Conservative limit
+                reset_needed = True
+                reason = f"high token usage ({estimated_tokens})"
+            
+            # Check message count
+            elif session.get("message_count", 0) > 75:  # 75% of limit
+                reset_needed = True
+                reason = f"high message count ({session.get('message_count', 0)})"
+            
+            # Check session age
+            elif current_time - session.get('created_at', current_time) > (90 * 60):  # 1.5 hours
+                reset_needed = True
+                reason = f"session age ({(current_time - session.get('created_at', current_time)) // 60:.0f} minutes)"
+            
+            if reset_needed:
+                try:
+                    session["chat"] = self.gemini_model.start_chat()
+                    session["message_count"] = 1
+                    session["created_at"] = current_time
+                    sessions_cleaned += 1
+                    print(f"🔄 Proactively reset session for channel {channel_id} (reason: {reason})")
+                except Exception as e:
+                    print(f"Error resetting session {channel_id}: {e}")
+        
+        if sessions_cleaned > 0:
+            print(f"🧹 Proactively cleaned {sessions_cleaned} chat sessions to prevent memory buildup")
     
     async def _cleanup_old_data(self):
         """Remove old and excessive learning data"""
@@ -1946,7 +2179,7 @@ class IzumiAI(commands.Cog):
         # Clean up old chat sessions
         sessions_to_remove = []
         for user_id, session in self.gemini_chat_sessions.items():
-            if current_time - session.get('created_at', 0) > 24 * 60 * 60:  # 24 hours
+            if current_time - session.get('created_at', 0) > 4 * 60 * 60:  # 4 hours - more aggressive cleanup
                 sessions_to_remove.append(user_id)
         
         for user_id in sessions_to_remove:

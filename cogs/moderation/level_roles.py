@@ -584,5 +584,39 @@ class LevelRolesCog(commands.Cog, name="Level Roles"):
             )
             await progress_msg.edit(content=None, embed=embed)
 
+    @commands.Cog.listener()
+    async def on_member_join(self, member: discord.Member):
+        """Automatically assign auto-roles when a new member joins"""
+        try:
+            # Don't assign roles to bots
+            if member.bot:
+                return
+                
+            guild_id_str = str(member.guild.id)
+            
+            # Check if there are any auto-roles configured for this guild
+            if not hasattr(self.bot, 'auto_roles') or guild_id_str not in self.bot.auto_roles:
+                return
+            
+            if not self.bot.auto_roles[guild_id_str]:
+                return
+            
+            # Get all auto-roles for this guild
+            roles_to_assign = []
+            for role_id_str in self.bot.auto_roles[guild_id_str]:
+                role = member.guild.get_role(int(role_id_str))
+                if role and role < member.guild.me.top_role:  # Make sure bot can assign the role
+                    roles_to_assign.append(role)
+            
+            # Assign roles if any are found
+            if roles_to_assign:
+                await member.add_roles(*roles_to_assign, reason="Auto-role assignment for new member")
+                print(f"✅ Auto-assigned {len(roles_to_assign)} role(s) to {member.display_name}: {[role.name for role in roles_to_assign]}")
+            else:
+                print(f"⚠️ No valid auto-roles found to assign to {member.display_name}")
+                
+        except Exception as e:
+            print(f"❌ Error auto-assigning roles to {member.display_name}: {e}")
+
 async def setup(bot):
     await bot.add_cog(LevelRolesCog(bot))
