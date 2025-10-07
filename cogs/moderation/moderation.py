@@ -662,22 +662,28 @@ class ModerationCog(commands.Cog, name="Moderation"):
 
         try:
             # Filter reaction roles to sync
+            guild_id_str = str(interaction.guild.id)
             roles_to_sync = {}
+            
             if message_id:
                 # Sync specific message
-                if message_id in self.bot.reaction_roles:
-                    roles_to_sync[message_id] = self.bot.reaction_roles[message_id]
+                if guild_id_str in self.bot.reaction_roles and message_id in self.bot.reaction_roles[guild_id_str]:
+                    roles_to_sync[message_id] = self.bot.reaction_roles[guild_id_str][message_id]
                 else:
                     await interaction.followup.send(f"❌ No reaction roles found for message ID: {message_id}")
                     return
             else:
-                # Sync all reaction role messages
-                roles_to_sync = self.bot.reaction_roles.copy()
+                # Sync all reaction role messages for this guild
+                if guild_id_str in self.bot.reaction_roles:
+                    roles_to_sync = self.bot.reaction_roles[guild_id_str].copy()
+                else:
+                    await interaction.followup.send("❌ No reaction roles found for this server.")
+                    return
 
             for msg_id, reaction_data in roles_to_sync.items():
                 try:
                     # Get the channel and message
-                    channel = self.bot.get_channel(reaction_data['channel_id'])
+                    channel = self.bot.get_channel(int(reaction_data['channel_id']))
                     if not channel:
                         continue
 
@@ -690,8 +696,8 @@ class ModerationCog(commands.Cog, name="Moderation"):
                     # Process each reaction on the message
                     for reaction in message.reactions:
                         emoji_str = str(reaction.emoji)
-                        if emoji_str in reaction_data['reactions']:
-                            role_id = reaction_data['reactions'][emoji_str]
+                        if emoji_str in reaction_data['roles']:
+                            role_id = int(reaction_data['roles'][emoji_str])
                             role = interaction.guild.get_role(role_id)
                             
                             if not role:
@@ -711,18 +717,24 @@ class ModerationCog(commands.Cog, name="Moderation"):
                                     try:
                                         await member.add_roles(role, reason="Reaction role sync")
                                         synced_count += 1
+                                        print(f"✅ Assigned {role.name} to {member.display_name}")
                                     except discord.Forbidden:
                                         error_count += 1
-                                    except Exception:
+                                        print(f"❌ Forbidden: Could not assign {role.name} to {member.display_name}")
+                                    except Exception as e:
                                         error_count += 1
+                                        print(f"❌ Error assigning {role.name} to {member.display_name}: {e}")
 
                 except discord.NotFound:
+                    print(f"❌ Message or channel not found for ID: {msg_id}")
                     continue
                 except discord.Forbidden:
                     error_count += 1
+                    print(f"❌ Forbidden: Could not access message {msg_id}")
                     continue
-                except Exception:
+                except Exception as e:
                     error_count += 1
+                    print(f"❌ Error processing message {msg_id}: {e}")
                     continue
 
             # Send summary
@@ -736,8 +748,8 @@ class ModerationCog(commands.Cog, name="Moderation"):
             
             if error_count > 0:
                 embed.add_field(
-                    name="Note", 
-                    value="Some roles couldn't be assigned. Check bot permissions and role hierarchy.", 
+                    name="⚠️ Issues Found", 
+                    value=f"Check console output for detailed error logs. Common causes:\n• Users left the server\n• Roles were deleted\n• Network/API errors", 
                     inline=False
                 )
 
