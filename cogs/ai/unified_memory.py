@@ -1891,25 +1891,32 @@ class UnifiedMemorySystem:
         
         result = {"use_quirk": False, "quirk_type": None, "quirk_content": None}
         
-        # Higher energy = more likely to use quirks
-        quirk_chance = energy_level * 0.7  # 0-70% chance based on energy
+        # NEVER use positive quirks in negative/confrontational contexts
+        if context_type in ["negative", "disagreement"]:
+            return result
+        
+        # Reduce overall quirk frequency to prevent inappropriate usage
+        quirk_chance = energy_level * 0.3  # Reduced from 0.7 to 0.3 (0-30% chance)
         
         if random.random() < quirk_chance:
             result["use_quirk"] = True
             
-            # Select quirk type based on context
-            if context_type == "agreement" and random.random() < 0.8:
+            # Select quirk type based on context - be much more restrictive
+            if context_type == "agreement" and random.random() < 0.6:  # Only for clear agreement
                 result["quirk_type"] = "agreement"
                 result["quirk_content"] = random.choice(quirks["speech_patterns"]["agreement"])
-            elif context_type == "enthusiasm" and energy_level > 0.6:
+            elif context_type == "enthusiasm" and energy_level > 0.7:  # Only when very energetic AND genuinely enthusiastic
                 result["quirk_type"] = "enthusiasm" 
                 result["quirk_content"] = random.choice(quirks["speech_patterns"]["enthusiasm"])
-            elif context_type == "thinking" and random.random() < 0.3:
+            elif context_type == "thinking" and random.random() < 0.2:  # Reduced frequency
                 result["quirk_type"] = "thinking"
                 result["quirk_content"] = random.choice(quirks["speech_patterns"]["thinking"])
-            elif context_type == "general" and random.random() < 0.4:
+            elif context_type == "general" and random.random() < 0.1:  # Much lower chance for random phrases
                 result["quirk_type"] = "favorite_phrase"
                 result["quirk_content"] = random.choice(quirks["favorite_phrases"])
+            else:
+                # Don't apply quirk if context doesn't clearly warrant it
+                result["use_quirk"] = False
         
         return result
 

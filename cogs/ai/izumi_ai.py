@@ -1351,6 +1351,16 @@ class IzumiAI(commands.Cog):
         response = re.sub(r'\n\s*\n+', '\n', response)
         response = re.sub(r'^\s+|\s+$', '', response)
         
+        # Check for contextually inappropriate positive endings and remove them
+        # Pattern: negative/confused content followed by positive phrase
+        if any(word in response.lower() for word in ["confused", "mean", "rude", "annoying", "what", "why are you"]):
+            # Remove inappropriate positive endings
+            inappropriate_endings = ["that's awesome!", "so cool!", "amazing!", "love that!", "yesss!", "omg yes!"]
+            for ending in inappropriate_endings:
+                if response.lower().endswith(ending.lower()):
+                    response = response[:-len(ending)].strip()
+                    break
+        
         return response
     
     async def _analyze_own_response(self, user_id: int, user_message: str, ai_response: str):
@@ -1430,11 +1440,14 @@ class IzumiAI(commands.Cog):
                 elif quirk_type == "agreement":
                     response_text = f"{quirk_content} {response_text}"
                 elif quirk_type == "favorite_phrase":
-                    # Sometimes add to end, sometimes replace simple acknowledgments
-                    if len(response_text.split()) <= 3:
-                        response_text = quirk_content
-                    else:
-                        response_text = f"{response_text} {quirk_content}"
+                    # Only add favorite phrases if the response doesn't already express strong emotion
+                    response_emotion_words = ["amazing", "awesome", "cool", "great", "love", "hate", "terrible", "awful", "annoying"]
+                    if not any(word in response_text.lower() for word in response_emotion_words):
+                        # Sometimes add to end, sometimes replace simple acknowledgments
+                        if len(response_text.split()) <= 3:
+                            response_text = quirk_content
+                        else:
+                            response_text = f"{response_text} {quirk_content}"
         
         # Apply occasional typos (very rarely)
         import random
@@ -1506,16 +1519,29 @@ class IzumiAI(commands.Cog):
         message_lower = original_message.lower()
         response_lower = response_text.lower()
         
-        # Check for agreement context
-        if any(word in response_lower for word in ["yes", "yeah", "exactly", "true", "agree", "right"]):
-            return "agreement"
+        # Check for negative/confrontational contexts first (should NOT get positive quirks)
+        negative_indicators = ["confused", "mean", "rude", "annoying", "stupid", "dumb", "hate", "angry", "mad", "wtf", "why are you"]
+        if any(indicator in message_lower for indicator in negative_indicators):
+            return "negative"
         
-        # Check for enthusiasm context
-        if any(word in message_lower for word in ["awesome", "cool", "amazing", "wow", "excited"]):
+        # Check for disagreement/conflict contexts
+        conflict_indicators = ["disagree", "wrong", "no", "nope", "not really", "i don't think", "that's not"]
+        if any(indicator in message_lower for indicator in conflict_indicators):
+            return "disagreement"
+        
+        # Check for genuine agreement context (only if both message and response show agreement)
+        if any(word in response_lower for word in ["yes", "yeah", "exactly", "true", "agree", "right"]):
+            agreement_indicators = ["yes", "yeah", "totally", "exactly", "true", "agree", "right", "definitely"]
+            if any(indicator in message_lower for indicator in agreement_indicators):
+                return "agreement"
+        
+        # Check for enthusiasm context (only for genuinely positive exchanges)
+        enthusiasm_indicators = ["awesome", "cool", "amazing", "wow", "excited", "love", "amazing", "incredible"]
+        if any(word in message_lower for word in enthusiasm_indicators) and any(word in response_lower for word in ["cool", "awesome", "amazing", "love", "excited"]):
             return "enthusiasm"
         
-        # Check for thinking context
-        if any(word in message_lower for word in ["think", "opinion", "what do you", "how do you"]):
+        # Check for thinking/question context
+        if any(word in message_lower for word in ["think", "opinion", "what do you", "how do you", "why", "what"]):
             return "thinking"
         
         return "general"
