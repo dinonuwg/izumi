@@ -640,6 +640,112 @@ class ModerationCog(commands.Cog, name="Moderation"):
         except Exception as e:
             await ctx.send(f"❌ An error occurred: {str(e)}")
 
+    @app_commands.command(name="sync_reaction_roles", description="Sync existing reactions with reaction roles (assign missing roles)")
+    @app_commands.describe(
+        message_id="The message ID to sync reactions for (optional - syncs all if not provided)"
+    )
+    async def sync_reaction_roles(self, interaction: discord.Interaction, message_id: str = None):
+        """Sync existing reactions with reaction roles to assign missing roles"""
+        if not interaction.user.guild_permissions.manage_roles:
+            await interaction.response.send_message("❌ You need the 'Manage Roles' permission to use this command.", ephemeral=True)
+            return
+
+        await interaction.response.defer()
+
+        if not hasattr(self.bot, 'reaction_roles') or not self.bot.reaction_roles:
+            await interaction.followup.send("❌ No reaction roles are currently set up.")
+            return
+
+        synced_count = 0
+        error_count = 0
+        messages_processed = 0
+
+        try:
+            # Filter reaction roles to sync
+            roles_to_sync = {}
+            if message_id:
+                # Sync specific message
+                if message_id in self.bot.reaction_roles:
+                    roles_to_sync[message_id] = self.bot.reaction_roles[message_id]
+                else:
+                    await interaction.followup.send(f"❌ No reaction roles found for message ID: {message_id}")
+                    return
+            else:
+                # Sync all reaction role messages
+                roles_to_sync = self.bot.reaction_roles.copy()
+
+            for msg_id, reaction_data in roles_to_sync.items():
+                try:
+                    # Get the channel and message
+                    channel = self.bot.get_channel(reaction_data['channel_id'])
+                    if not channel:
+                        continue
+
+                    message = await channel.fetch_message(int(msg_id))
+                    if not message:
+                        continue
+
+                    messages_processed += 1
+
+                    # Process each reaction on the message
+                    for reaction in message.reactions:
+                        emoji_str = str(reaction.emoji)
+                        if emoji_str in reaction_data['reactions']:
+                            role_id = reaction_data['reactions'][emoji_str]
+                            role = interaction.guild.get_role(role_id)
+                            
+                            if not role:
+                                continue
+
+                            # Get all users who reacted with this emoji
+                            async for user in reaction.users():
+                                if user.bot:  # Skip bots
+                                    continue
+
+                                member = interaction.guild.get_member(user.id)
+                                if not member:
+                                    continue
+
+                                # Check if user already has the role
+                                if role not in member.roles:
+                                    try:
+                                        await member.add_roles(role, reason="Reaction role sync")
+                                        synced_count += 1
+                                    except discord.Forbidden:
+                                        error_count += 1
+                                    except Exception:
+                                        error_count += 1
+
+                except discord.NotFound:
+                    continue
+                except discord.Forbidden:
+                    error_count += 1
+                    continue
+                except Exception:
+                    error_count += 1
+                    continue
+
+            # Send summary
+            embed = discord.Embed(
+                title="✅ Reaction Role Sync Complete",
+                color=discord.Color.green()
+            )
+            embed.add_field(name="Messages Processed", value=str(messages_processed), inline=True)
+            embed.add_field(name="Roles Assigned", value=str(synced_count), inline=True)
+            embed.add_field(name="Errors", value=str(error_count), inline=True)
+            
+            if error_count > 0:
+                embed.add_field(
+                    name="Note", 
+                    value="Some roles couldn't be assigned. Check bot permissions and role hierarchy.", 
+                    inline=False
+                )
+
+            await interaction.followup.send(embed=embed)
+
+        except Exception as e:
+            await interaction.followup.send(f"❌ An error occurred during sync: {str(e)}")
+
     @commands.Cog.listener()
     async def on_raw_reaction_add(self, payload):
         """Handle reaction role assignment when user adds reaction"""
