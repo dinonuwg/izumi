@@ -640,6 +640,122 @@ class ModerationCog(commands.Cog, name="Moderation"):
         except Exception as e:
             await ctx.send(f"❌ An error occurred: {str(e)}")
 
+    @commands.Cog.listener()
+    async def on_raw_reaction_add(self, payload):
+        """Handle reaction role assignment when user adds reaction"""
+        # Ignore bot reactions
+        if payload.user_id == self.bot.user.id:
+            return
+
+        # Check if this message has reaction roles set up
+        if not hasattr(self.bot, 'reaction_roles'):
+            return
+
+        guild_id_str = str(payload.guild_id)
+        message_id_str = str(payload.message_id)
+
+        if guild_id_str not in self.bot.reaction_roles:
+            return
+
+        if message_id_str not in self.bot.reaction_roles[guild_id_str]:
+            return
+
+        reaction_role_data = self.bot.reaction_roles[guild_id_str][message_id_str]
+        emoji_str = str(payload.emoji)
+
+        # Check if this emoji is mapped to a role
+        if emoji_str not in reaction_role_data['roles']:
+            return
+
+        try:
+            guild = self.bot.get_guild(payload.guild_id)
+            if not guild:
+                return
+
+            member = guild.get_member(payload.user_id)
+            if not member:
+                return
+
+            role_id = int(reaction_role_data['roles'][emoji_str])
+            role = guild.get_role(role_id)
+            
+            if not role:
+                print(f"Reaction role not found: {role_id} in guild {guild.name}")
+                return
+
+            # Check if member already has the role
+            if role in member.roles:
+                return
+
+            # Check if bot can assign the role
+            if role >= guild.me.top_role:
+                print(f"Cannot assign role {role.name} - higher than bot's highest role")
+                return
+
+            await member.add_roles(role, reason="Reaction role assignment")
+            print(f"Assigned role {role.name} to {member.display_name} via reaction")
+
+        except Exception as e:
+            print(f"Error assigning reaction role: {e}")
+
+    @commands.Cog.listener()
+    async def on_raw_reaction_remove(self, payload):
+        """Handle reaction role removal when user removes reaction"""
+        # Ignore bot reactions
+        if payload.user_id == self.bot.user.id:
+            return
+
+        # Check if this message has reaction roles set up
+        if not hasattr(self.bot, 'reaction_roles'):
+            return
+
+        guild_id_str = str(payload.guild_id)
+        message_id_str = str(payload.message_id)
+
+        if guild_id_str not in self.bot.reaction_roles:
+            return
+
+        if message_id_str not in self.bot.reaction_roles[guild_id_str]:
+            return
+
+        reaction_role_data = self.bot.reaction_roles[guild_id_str][message_id_str]
+        emoji_str = str(payload.emoji)
+
+        # Check if this emoji is mapped to a role
+        if emoji_str not in reaction_role_data['roles']:
+            return
+
+        try:
+            guild = self.bot.get_guild(payload.guild_id)
+            if not guild:
+                return
+
+            member = guild.get_member(payload.user_id)
+            if not member:
+                return
+
+            role_id = int(reaction_role_data['roles'][emoji_str])
+            role = guild.get_role(role_id)
+            
+            if not role:
+                print(f"Reaction role not found: {role_id} in guild {guild.name}")
+                return
+
+            # Check if member has the role
+            if role not in member.roles:
+                return
+
+            # Check if bot can remove the role
+            if role >= guild.me.top_role:
+                print(f"Cannot remove role {role.name} - higher than bot's highest role")
+                return
+
+            await member.remove_roles(role, reason="Reaction role removal")
+            print(f"Removed role {role.name} from {member.display_name} via reaction removal")
+
+        except Exception as e:
+            print(f"Error removing reaction role: {e}")
+
     @commands.command(name="purge", aliases=["clear", "delete", "clean"])
     @commands.has_permissions(manage_messages=True)
     @commands.bot_has_permissions(manage_messages=True)
