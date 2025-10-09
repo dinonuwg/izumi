@@ -307,16 +307,22 @@ class IzumiAI(commands.Cog):
         # ALWAYS learn from messages (even when not mentioned)
         await self.learning_engine.learn_from_message(message)
         
-        # Check for song lyrics first (before other responses)
-        lyrics_match = await self._check_for_lyrics(message)
-        if lyrics_match:
-            return  # Lyrics response sent, don't process further
+        # Check for song lyrics detection (don't respond yet, just detect)
+        lyrics_detected = await self._detect_lyrics_context(message)
         
         # Handle AI responses when mentioned
         if self.bot.user in message.mentions:
             print(f"🤖 {message.author.display_name} mentioned Izumi: {message.content[:100]}...")
-            await self._handle_ai_response(message)
+            # Pass lyrics context if detected
+            await self._handle_ai_response(message, is_lyrics=lyrics_detected)
         else:
+            # If lyrics detected but not mentioned, respond with lyrics
+            if lyrics_detected:
+                # Random chance to respond without being mentioned (50%)
+                if random.randint(1, 100) <= 50:
+                    await self._handle_ai_response(message, is_lyrics=True)
+                return
+            
             # Check if someone mentioned "izumi" and she recently participated
             if await self._should_continue_conversation(message):
                 await self._continue_conversation(message)
@@ -376,8 +382,8 @@ class IzumiAI(commands.Cog):
         
         return len(intersection) / len(union) if union else 0.0
     
-    async def _check_for_lyrics(self, message: discord.Message) -> bool:
-        """Check if message contains song lyrics and inject context for AI response"""
+    async def _detect_lyrics_context(self, message: discord.Message) -> bool:
+        """Detect if message contains song lyrics and store context"""
         # Get lyrics cog
         lyrics_cog = self.bot.get_cog('Lyrics')
         if not lyrics_cog:
@@ -387,25 +393,23 @@ class IzumiAI(commands.Cog):
         match = lyrics_cog.find_matching_lyric(message.content)
         
         if match and match['confidence'] >= 0.75:  # High confidence match
-            print(f"🎵 Detected lyrics from '{match['song']}' by {match['artist']} - feeding to AI")
+            print(f"🎵 Detected lyrics from '{match['song']}' by {match['artist']} (confidence: {match['confidence']:.2f})")
             
-            # Random chance to respond (70% chance to make it feel natural, not every time)
-            if random.randint(1, 100) <= 70:
-                # Store lyrics context temporarily for this message
-                if not hasattr(self, '_lyrics_context'):
-                    self._lyrics_context = {}
-                
-                self._lyrics_context[message.id] = match
-                
-                # Trigger AI response with lyrics context
-                await self._handle_ai_response(message, is_lyrics=True)
-                
-                # Clean up context after a delay
-                await asyncio.sleep(30)
-                if message.id in self._lyrics_context:
+            # Store lyrics context temporarily for this message
+            if not hasattr(self, '_lyrics_context'):
+                self._lyrics_context = {}
+            
+            self._lyrics_context[message.id] = match
+            
+            # Schedule cleanup of context after delay
+            async def cleanup_context():
+                await asyncio.sleep(60)
+                if hasattr(self, '_lyrics_context') and message.id in self._lyrics_context:
                     del self._lyrics_context[message.id]
-                
-                return True
+            
+            asyncio.create_task(cleanup_context())
+            
+            return True
         
         return False
     
@@ -767,14 +771,18 @@ class IzumiAI(commands.Cog):
             if is_lyrics and hasattr(self, '_lyrics_context') and message.id in self._lyrics_context:
                 match = self._lyrics_context[message.id]
                 lyrics_context = (
-                    f"\n\n🎵 SONG DETECTED: The user just sang part of '{match['song']}' by {match['artist']}! "
-                    f"They sang: '{match['current_line']}'\n"
-                    f"The next line of the song is: '{match['next_line']}'\n"
-                    f"You should continue the song naturally! You can either:\n"
-                    f"1. Just sing the next line: '{match['next_line']}'\n"
-                    f"2. Sing it with enthusiasm: '*continues singing* {match['next_line']}'\n"
-                    f"3. Sing and add a comment: '{match['next_line']} omg love this song!'\n"
-                    f"Make it feel natural and fun, like you're vibing to music with them!"
+                    f"\n\n🎵 IMPORTANT - SONG LYRICS CONTINUATION:\n"
+                    f"The user is singing '{match['song']}' by {match['artist']}!\n"
+                    f"Line they just sang: \"{match['current_line']}\"\n"
+                    f"THE NEXT LINE IS: \"{match['next_line']}\"\n\n"
+                    f"YOUR RESPONSE MUST BE: Continue the song by singing the next line naturally!\n"
+                    f"Examples of good responses:\n"
+                    f"- Just the next line: \"{match['next_line']}\"\n"
+                    f"- With enthusiasm: \"*continues singing* {match['next_line']}\"\n"
+                    f"- With a comment: \"{match['next_line']} omg i love this song!\"\n"
+                    f"- Vibing: \"{match['next_line']} 🎵✨\"\n\n"
+                    f"RESPOND IMMEDIATELY WITH THE NEXT LYRICS LINE. Do NOT say you don't know the song. "
+                    f"The next line is provided above - use it!"
                 )
             
             # Create full prompt with proper conversation context labeling
