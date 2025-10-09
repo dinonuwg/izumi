@@ -39,8 +39,8 @@ class ImageGenerationCog(commands.Cog, name="ImageGen"):
             
             # Use the correct model name for Gemini 2.0 Flash Preview Image Generation
             # This model supports both text and image generation with 100 requests/day free tier
-            self.image_model = genai.GenerativeModel('gemini-2.0-flash-exp-image-generation')
-            print("✅ Gemini 2.0 Flash Image Generation model initialized (100 requests/day)")
+            self.image_model = genai.GenerativeModel('gemini-2.0-flash-preview-image-generation')
+            print("✅ Gemini 2.0 Flash Preview Image Generation model initialized (100 requests/day)")
             
         except Exception as e:
             print(f"❌ Failed to initialize image model: {e}")
