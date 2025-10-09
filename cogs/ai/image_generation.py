@@ -37,24 +37,10 @@ class ImageGenerationCog(commands.Cog, name="ImageGen"):
             
             genai.configure(api_key=api_key)
             
-            # Try different model names for image generation
-            model_names = [
-                'gemini-2.0-flash-exp',
-                'gemini-exp-1206',
-                'imagen-3.0-generate-001',
-                'imagen-3.0-fast-generate-001'
-            ]
-            
-            for model_name in model_names:
-                try:
-                    self.image_model = genai.GenerativeModel(model_name)
-                    print(f"✅ Image model initialized: {model_name}")
-                    return
-                except Exception as e:
-                    print(f"⚠️ Failed to load {model_name}: {e}")
-                    continue
-            
-            print("❌ No suitable image generation model found")
+            # Use the correct model name for Gemini 2.0 Flash Preview Image Generation
+            # This model supports both text and image generation with 100 requests/day free tier
+            self.image_model = genai.GenerativeModel('gemini-2.0-flash-exp-image-generation')
+            print("✅ Gemini 2.0 Flash Image Generation model initialized (100 requests/day)")
             
         except Exception as e:
             print(f"❌ Failed to initialize image model: {e}")
