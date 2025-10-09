@@ -42,7 +42,6 @@ class OsuGachaLeaderboardsCog(commands.Cog, name="Osu Gacha Leaderboards"):
         app_commands.Choice(name="Daily Streak", value="daily_streak"),
         app_commands.Choice(name="Most Trades", value="total_trades")
     ])
-    @app_commands.default_permissions()  # Available to everyone (@everyone role)
     async def osu_leaderboard_slash(self, interaction: discord.Interaction, board_type: str = "currency"):
         await self._leaderboard_command(interaction, board_type)
 
