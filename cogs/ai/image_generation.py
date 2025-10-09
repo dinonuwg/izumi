@@ -1,6 +1,7 @@
 """
-Image Generation System using Gemini 2.0 Flash
+Image Generation System using Gemini 2.5 Flash Image (Nano Banana)
 Handles image generation, editing, and vision capabilities
+Available on free tier!
 """
 
 import discord
@@ -28,7 +29,7 @@ class ImageGenerationCog(commands.Cog, name="ImageGen"):
         self.last_reset = self.usage_data.get('last_reset', time.time())
         
     def _setup_image_model(self):
-        """Initialize Gemini 2.0 Flash model for image generation"""
+        """Initialize Gemini 2.0 Flash Preview Image Generation model"""
         try:
             api_key = os.getenv('GEMINI_API_KEY')
             if not api_key:
@@ -37,10 +38,10 @@ class ImageGenerationCog(commands.Cog, name="ImageGen"):
             
             genai.configure(api_key=api_key)
             
-            # Use the correct model name for Gemini 2.0 Flash Preview Image Generation
-            # This model supports both text and image generation with 100 requests/day free tier
-            self.image_model = genai.GenerativeModel('gemini-2.0-flash-preview-image-generation')
-            print("✅ Gemini 2.0 Flash Preview Image Generation model initialized (100 requests/day)")
+            # Use Gemini 2.5 Flash Image (available on free tier - confirmed by models list!)
+            # This model supports both text and image generation
+            self.image_model = genai.GenerativeModel('gemini-2.5-flash-image')
+            print("✅ Gemini 2.5 Flash Image model initialized (Free tier available!)")
             
         except Exception as e:
             print(f"❌ Failed to initialize image model: {e}")
