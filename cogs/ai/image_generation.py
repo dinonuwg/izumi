@@ -36,9 +36,26 @@ class ImageGenerationCog(commands.Cog, name="ImageGen"):
                 return
             
             genai.configure(api_key=api_key)
-            # Use Gemini 2.0 Flash for image generation
-            self.image_model = genai.GenerativeModel('gemini-2.0-flash-exp')
-            print("✅ Gemini 2.0 Flash image model initialized")
+            
+            # Try different model names for image generation
+            model_names = [
+                'gemini-2.0-flash-exp',
+                'gemini-exp-1206',
+                'imagen-3.0-generate-001',
+                'imagen-3.0-fast-generate-001'
+            ]
+            
+            for model_name in model_names:
+                try:
+                    self.image_model = genai.GenerativeModel(model_name)
+                    print(f"✅ Image model initialized: {model_name}")
+                    return
+                except Exception as e:
+                    print(f"⚠️ Failed to load {model_name}: {e}")
+                    continue
+            
+            print("❌ No suitable image generation model found")
+            
         except Exception as e:
             print(f"❌ Failed to initialize image model: {e}")
     
@@ -82,6 +99,7 @@ class ImageGenerationCog(commands.Cog, name="ImageGen"):
     async def generate_image(self, prompt: str, reference_image: Image.Image = None) -> bytes:
         """Generate or edit an image using Gemini 2.0 Flash"""
         if not self.image_model:
+            print("❌ Image model not initialized")
             return None
         
         if not self.can_generate_image():
@@ -89,12 +107,30 @@ class ImageGenerationCog(commands.Cog, name="ImageGen"):
             return None
         
         try:
+            print(f"🎨 Attempting image generation with prompt: {prompt[:100]}")
+            
+            # Gemini 2.0 Flash Experimental has image generation
+            # The correct way to request image generation
             if reference_image:
-                # Image editing mode
-                response = self.image_model.generate_content([prompt, reference_image])
+                # Image editing mode - provide both prompt and reference
+                full_prompt = f"Based on this image, {prompt}. Generate a new image that applies these changes."
+                response = self.image_model.generate_content(
+                    [full_prompt, reference_image],
+                    generation_config=genai.GenerationConfig(
+                        response_modalities=["image"]
+                    )
+                )
             else:
                 # Pure generation mode
-                response = self.image_model.generate_content(prompt)
+                response = self.image_model.generate_content(
+                    prompt,
+                    generation_config=genai.GenerationConfig(
+                        response_modalities=["image"]
+                    )
+                )
+            
+            print(f"📥 Response received, checking for image data...")
+            print(f"Response parts: {len(response.parts) if response.parts else 0}")
             
             # Increment usage counter
             self.daily_generations += 1
@@ -102,15 +138,22 @@ class ImageGenerationCog(commands.Cog, name="ImageGen"):
             
             # Extract image from response
             if response.parts:
-                for part in response.parts:
-                    if hasattr(part, 'inline_data'):
-                        image_data = part.inline_data.data
-                        return image_data
+                for i, part in enumerate(response.parts):
+                    print(f"Part {i}: {type(part)}, has inline_data: {hasattr(part, 'inline_data')}")
+                    if hasattr(part, 'inline_data') and part.inline_data:
+                        if hasattr(part.inline_data, 'data'):
+                            print(f"✅ Found image data in part {i}")
+                            return part.inline_data.data
+                        if hasattr(part.inline_data, 'mime_type'):
+                            print(f"Mime type: {part.inline_data.mime_type}")
             
+            print("❌ No image data found in response")
             return None
             
         except Exception as e:
-            print(f"❌ Image generation error: {e}")
+            print(f"❌ Image generation error: {type(e).__name__}: {e}")
+            import traceback
+            traceback.print_exc()
             return None
     
     def detect_image_request(self, message_content: str) -> dict:
