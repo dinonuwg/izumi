@@ -181,13 +181,17 @@ class MinimalBot(commands.Bot):
         print("🔄 Loading bot extensions...")
         
         # load ai cog system
-        ai_cogs = ['cogs.ai.izumi_ai', 'cogs.ai.memory', 'cogs.ai.image_generation']
+        ai_cogs = ['cogs.ai.izumi_ai', 'cogs.ai.memory']  # image_generation removed - requires paid tier
         for cog in ai_cogs:
             try:
                 await self.load_extension(cog)
                 print(f"✅ loaded {cog}")
             except Exception as e:
                 print(f"❌ failed to load {cog}: {e}")
+        
+        # Note: Image generation is disabled - requires Google Cloud paid account
+        # The free tier has 0 quota for image generation models
+        print("ℹ️  Image generation disabled (requires paid Google Cloud account)")
         
         # load moderation cogs
         moderation_cogs = [

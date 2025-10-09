@@ -218,6 +218,15 @@ class ImageGenerationCog(commands.Cog, name="ImageGen"):
     
     async def handle_image_request(self, message: discord.Message, prompt: str, image_url: str = None):
         """Handle an image generation/editing request"""
+        # Check if we have any working models
+        if not self.image_models:
+            await message.reply(
+                "sorry! image generation isn't available on the free tier 😅\n"
+                "it requires a paid google cloud account",
+                mention_author=False
+            )
+            return
+            
         if not self.can_generate_image():
             remaining = 100 - self.daily_generations
             await message.reply(
