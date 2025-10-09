@@ -181,7 +181,7 @@ class MinimalBot(commands.Bot):
         print("🔄 Loading bot extensions...")
         
         # load ai cog system
-        ai_cogs = ['cogs.ai.izumi_ai', 'cogs.ai.memory']
+        ai_cogs = ['cogs.ai.izumi_ai', 'cogs.ai.memory', 'cogs.ai.image_generation']
         for cog in ai_cogs:
             try:
                 await self.load_extension(cog)

@@ -307,6 +307,15 @@ class IzumiAI(commands.Cog):
         # ALWAYS learn from messages (even when not mentioned)
         await self.learning_engine.learn_from_message(message)
         
+        # Check for image generation request when mentioned
+        if self.bot.user in message.mentions:
+            image_gen_cog = self.bot.get_cog('ImageGen')
+            if image_gen_cog:
+                request_info = image_gen_cog.detect_image_request(message.content)
+                if request_info['detected']:
+                    await self._handle_image_request(message, request_info)
+                    return
+        
         # Check for song lyrics detection (don't respond yet, just detect)
         lyrics_detected = await self._detect_lyrics_context(message)
         
@@ -381,6 +390,62 @@ class IzumiAI(commands.Cog):
         union = words1.union(words2)
         
         return len(intersection) / len(union) if union else 0.0
+    
+    async def _handle_image_request(self, message: discord.Message, request_info: dict):
+        """Handle image generation/editing requests"""
+        image_gen_cog = self.bot.get_cog('ImageGen')
+        if not image_gen_cog:
+            return
+        
+        print(f"🎨 Image request detected: {request_info}")
+        
+        # Extract image URL if present
+        image_url = None
+        
+        # Check for profile picture request
+        if request_info['wants_pfp']:
+            # Check if they mentioned someone else
+            if message.mentions and len(message.mentions) > 1:
+                # Get the first non-bot mention (skip Izumi)
+                target_user = next((u for u in message.mentions if u.id != self.bot.user.id), None)
+                if target_user:
+                    image_url = target_user.display_avatar.url
+                    print(f"🖼️ Using {target_user.display_name}'s pfp: {image_url}")
+            else:
+                # Use their own pfp
+                image_url = message.author.display_avatar.url
+                print(f"🖼️ Using {message.author.display_name}'s pfp: {image_url}")
+        
+        # Check for attached images
+        elif message.attachments:
+            for attachment in message.attachments:
+                if attachment.content_type and attachment.content_type.startswith('image/'):
+                    image_url = attachment.url
+                    print(f"🖼️ Using attached image: {image_url}")
+                    break
+        
+        # Check for referenced message with image
+        elif message.reference:
+            try:
+                ref_message = await message.channel.fetch_message(message.reference.message_id)
+                if ref_message.attachments:
+                    for attachment in ref_message.attachments:
+                        if attachment.content_type and attachment.content_type.startswith('image/'):
+                            image_url = attachment.url
+                            print(f"🖼️ Using image from referenced message: {image_url}")
+                            break
+            except:
+                pass
+        
+        # Generate prompt for image generation
+        prompt = message.content
+        # Remove mentions from prompt
+        for mention in message.mentions:
+            prompt = prompt.replace(f'<@{mention.id}>', '').replace(f'<@!{mention.id}>', '')
+        prompt = prompt.strip()
+        
+        # Handle the image request
+        await image_gen_cog.handle_image_request(message, prompt, image_url)
     
     async def _detect_lyrics_context(self, message: discord.Message) -> bool:
         """Detect if message contains song lyrics and store context"""
