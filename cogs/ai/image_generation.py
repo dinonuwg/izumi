@@ -101,18 +101,12 @@ class ImageGenerationCog(commands.Cog, name="ImageGen"):
                 # Image editing mode - provide both prompt and reference
                 full_prompt = f"Based on this image, {prompt}. Generate a new image that applies these changes."
                 response = self.image_model.generate_content(
-                    [full_prompt, reference_image],
-                    generation_config=genai.GenerationConfig(
-                        response_modalities=["image"]
-                    )
+                    [full_prompt, reference_image]
                 )
             else:
                 # Pure generation mode
                 response = self.image_model.generate_content(
-                    prompt,
-                    generation_config=genai.GenerationConfig(
-                        response_modalities=["image"]
-                    )
+                    prompt
                 )
             
             print(f"📥 Response received, checking for image data...")
