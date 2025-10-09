@@ -799,7 +799,7 @@ class UtilityCog(commands.Cog, name="Utility"):
         
         # Add download link
         embed.add_field(
-            name="🔗 Links",
+            name="Links",
             value=f"[Download]({avatar_url})",
             inline=False
         )
@@ -807,7 +807,7 @@ class UtilityCog(commands.Cog, name="Utility"):
         # If there's a different global avatar, mention it
         if global_avatar_url and global_avatar_url != avatar_url:
             embed.add_field(
-                name="📎 Global Avatar",
+                name="Global Avatar",
                 value=f"[View Global Avatar]({global_avatar_url})",
                 inline=False
             )
