@@ -307,6 +307,11 @@ class IzumiAI(commands.Cog):
         # ALWAYS learn from messages (even when not mentioned)
         await self.learning_engine.learn_from_message(message)
         
+        # Check for song lyrics first (before other responses)
+        lyrics_match = await self._check_for_lyrics(message)
+        if lyrics_match:
+            return  # Lyrics response sent, don't process further
+        
         # Handle AI responses when mentioned
         if self.bot.user in message.mentions:
             print(f"🤖 {message.author.display_name} mentioned Izumi: {message.content[:100]}...")
@@ -370,6 +375,44 @@ class IzumiAI(commands.Cog):
         union = words1.union(words2)
         
         return len(intersection) / len(union) if union else 0.0
+    
+    async def _check_for_lyrics(self, message: discord.Message) -> bool:
+        """Check if message contains song lyrics and respond with continuation"""
+        # Get lyrics cog
+        lyrics_cog = self.bot.get_cog('Lyrics')
+        if not lyrics_cog:
+            return False
+        
+        # Check if message matches any known lyrics
+        match = lyrics_cog.find_matching_lyric(message.content)
+        
+        if match and match['confidence'] >= 0.75:  # High confidence match
+            print(f"🎵 Detected lyrics from '{match['song']}' by {match['artist']}")
+            
+            # Random chance to respond (70% chance to make it feel natural, not every time)
+            if random.randint(1, 100) <= 70:
+                # Add typing delay for natural feel
+                await self._type_with_delay(message.channel, match['next_line'])
+                
+                # Send the next line
+                await message.channel.send(match['next_line'])
+                
+                # Occasionally add a comment about the song (20% chance)
+                if random.randint(1, 100) <= 20:
+                    comments = [
+                        f"love that song! 🎵",
+                        f"*vibes to {match['song']}* ✨",
+                        f"omg {match['artist']} is so good",
+                        f"this song is such a bop",
+                        f"*continues singing*",
+                        f"great taste in music!"
+                    ]
+                    await asyncio.sleep(1.5)
+                    await message.channel.send(random.choice(comments))
+                
+                return True
+        
+        return False
     
     async def _check_conversation_participation(self, message: discord.Message):
         """Check if Izumi should join an active conversation"""

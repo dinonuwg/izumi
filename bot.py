@@ -196,7 +196,8 @@ class MinimalBot(commands.Bot):
             'cogs.moderation.level_roles',
             'cogs.moderation.moderation',
             'cogs.moderation.social',
-            'cogs.moderation.utility'
+            'cogs.moderation.utility',
+            'cogs.moderation.lyrics'
         ]
         for cog in moderation_cogs:
             try:
