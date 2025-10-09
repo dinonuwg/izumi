@@ -758,5 +758,66 @@ class UtilityCog(commands.Cog, name="Utility"):
         for embed in embeds[1:]:
             await interaction.followup.send(embed=embed, ephemeral=True)
 
+    @app_commands.command(name="pfp", description="Display a user's profile picture")
+    @app_commands.describe(user="The user whose profile picture to display (defaults to yourself)")
+    async def pfp_slash(self, interaction: discord.Interaction, user: discord.Member = None):
+        """Display a user's profile picture"""
+        await self._handle_pfp(interaction, user, True)
+    
+    @commands.command(name="pfp", aliases=["avatar", "av", "profilepic", "profilepicture"])
+    async def pfp_prefix(self, ctx: commands.Context, user: discord.Member = None):
+        """Display a user's profile picture
+        
+        Usage: 
+        - !pfp - Shows your own profile picture
+        - !pfp @user - Shows mentioned user's profile picture
+        - +pfp @user - Also works with + prefix
+        """
+        await self._handle_pfp(ctx, user, False)
+    
+    async def _handle_pfp(self, ctx_or_interaction, user, is_slash):
+        """Handle PFP command for both slash and prefix commands"""
+        # Default to command author if no user specified
+        if user is None:
+            user = ctx_or_interaction.user if is_slash else ctx_or_interaction.author
+        
+        # Get the user's avatar URL
+        # Use display_avatar which respects server-specific avatars
+        avatar_url = user.display_avatar.url
+        
+        # Also get the global avatar URL if different from server avatar
+        global_avatar_url = user.avatar.url if user.avatar else None
+        
+        # Create embed
+        embed = discord.Embed(
+            title=f"{user.display_name}'s Profile Picture",
+            color=user.color if user.color != discord.Color.default() else discord.Color.blue()
+        )
+        
+        # Set the main image to the display avatar (server-specific or global)
+        embed.set_image(url=avatar_url)
+        
+        # Add download link
+        embed.add_field(
+            name="🔗 Links",
+            value=f"[Download]({avatar_url})",
+            inline=False
+        )
+        
+        # If there's a different global avatar, mention it
+        if global_avatar_url and global_avatar_url != avatar_url:
+            embed.add_field(
+                name="📎 Global Avatar",
+                value=f"[View Global Avatar]({global_avatar_url})",
+                inline=False
+            )
+            embed.set_footer(text="Showing server-specific avatar")
+        
+        # Send response
+        if is_slash:
+            await ctx_or_interaction.response.send_message(embed=embed)
+        else:
+            await ctx_or_interaction.send(embed=embed)
+
 async def setup(bot):
     await bot.add_cog(UtilityCog(bot))
