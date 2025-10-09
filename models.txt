@@ -1,0 +1,492 @@
+Listing all available models:
+
+================================================================================
+
+Model: models/embedding-gecko-001
+   Display Name: Embedding Gecko
+   Description: Obtain a distributed representation of a text.
+   Supported Methods: ['embedText', 'countTextTokens']
+   Input Token Limit: 1,024
+   Output Token Limit: 1
+
+Model: models/gemini-2.5-pro-preview-03-25
+   Display Name: Gemini 2.5 Pro Preview 03-25
+   Description: Gemini 2.5 Pro Preview 03-25
+   Supported Methods: ['generateContent', 'countTokens', 'createCachedContent', 'batchGenerateContent']
+   Input Token Limit: 1,048,576
+   Output Token Limit: 65,536
+
+Model: models/gemini-2.5-flash-preview-05-20
+   Display Name: Gemini 2.5 Flash Preview 05-20
+   Description: Preview release (April 17th, 2025) of Gemini 2.5 Flash
+   Supported Methods: ['generateContent', 'countTokens', 'createCachedContent', 'batchGenerateContent']
+   Input Token Limit: 1,048,576
+   Output Token Limit: 65,536
+
+Model: models/gemini-2.5-flash
+   Display Name: Gemini 2.5 Flash
+   Description: Stable version of Gemini 2.5 Flash, our mid-size multimodal model that supports up to 1 million tokens, released in June of 2025.
+   Supported Methods: ['generateContent', 'countTokens', 'createCachedContent', 'batchGenerateContent']
+   Input Token Limit: 1,048,576
+   Output Token Limit: 65,536
+
+Model: models/gemini-2.5-flash-lite-preview-06-17
+   Display Name: Gemini 2.5 Flash-Lite Preview 06-17
+   Description: Preview release (June 11th, 2025) of Gemini 2.5 Flash-Lite
+   Supported Methods: ['generateContent', 'countTokens', 'createCachedContent', 'batchGenerateContent']
+   Input Token Limit: 1,048,576
+   Output Token Limit: 65,536
+
+Model: models/gemini-2.5-pro-preview-05-06
+   Display Name: Gemini 2.5 Pro Preview 05-06
+   Description: Preview release (May 6th, 2025) of Gemini 2.5 Pro
+   Supported Methods: ['generateContent', 'countTokens', 'createCachedContent', 'batchGenerateContent']
+   Input Token Limit: 1,048,576
+   Output Token Limit: 65,536
+
+Model: models/gemini-2.5-pro-preview-06-05
+   Display Name: Gemini 2.5 Pro Preview
+   Description: Preview release (June 5th, 2025) of Gemini 2.5 Pro
+   Supported Methods: ['generateContent', 'countTokens', 'createCachedContent', 'batchGenerateContent']
+   Input Token Limit: 1,048,576
+   Output Token Limit: 65,536
+
+Model: models/gemini-2.5-pro
+   Display Name: Gemini 2.5 Pro
+   Description: Stable release (June 17th, 2025) of Gemini 2.5 Pro
+   Supported Methods: ['generateContent', 'countTokens', 'createCachedContent', 'batchGenerateContent']
+   Input Token Limit: 1,048,576
+   Output Token Limit: 65,536
+
+Model: models/gemini-2.0-flash-exp
+   Display Name: Gemini 2.0 Flash Experimental
+   Description: Gemini 2.0 Flash Experimental
+   Supported Methods: ['generateContent', 'countTokens', 'bidiGenerateContent']
+   Input Token Limit: 1,048,576
+   Output Token Limit: 8,192
+
+Model: models/gemini-2.0-flash
+   Display Name: Gemini 2.0 Flash
+   Description: Gemini 2.0 Flash
+   Supported Methods: ['generateContent', 'countTokens', 'createCachedContent', 'batchGenerateContent']
+   Input Token Limit: 1,048,576
+   Output Token Limit: 8,192
+
+Model: models/gemini-2.0-flash-001
+   Display Name: Gemini 2.0 Flash 001
+   Description: Stable version of Gemini 2.0 Flash, our fast and versatile multimodal model for scaling across diverse tasks, released in January of 2025.
+   Supported Methods: ['generateContent', 'countTokens', 'createCachedContent', 'batchGenerateContent']
+   Input Token Limit: 1,048,576
+   Output Token Limit: 8,192
+
+Model: models/gemini-2.0-flash-lite-001
+   Display Name: Gemini 2.0 Flash-Lite 001
+   Description: Stable version of Gemini 2.0 Flash-Lite
+   Supported Methods: ['generateContent', 'countTokens', 'createCachedContent', 'batchGenerateContent']
+   Input Token Limit: 1,048,576
+   Output Token Limit: 8,192
+
+Model: models/gemini-2.0-flash-lite
+   Display Name: Gemini 2.0 Flash-Lite
+   Description: Gemini 2.0 Flash-Lite
+   Supported Methods: ['generateContent', 'countTokens', 'createCachedContent', 'batchGenerateContent']
+   Input Token Limit: 1,048,576
+   Output Token Limit: 8,192
+
+Model: models/gemini-2.0-flash-lite-preview-02-05
+   Display Name: Gemini 2.0 Flash-Lite Preview 02-05
+   Description: Preview release (February 5th, 2025) of Gemini 2.0 Flash-Lite
+   Supported Methods: ['generateContent', 'countTokens', 'createCachedContent', 'batchGenerateContent']
+   Input Token Limit: 1,048,576
+   Output Token Limit: 8,192
+
+Model: models/gemini-2.0-flash-lite-preview
+   Display Name: Gemini 2.0 Flash-Lite Preview
+   Description: Preview release (February 5th, 2025) of Gemini 2.0 Flash-Lite
+   Supported Methods: ['generateContent', 'countTokens', 'createCachedContent', 'batchGenerateContent']
+   Input Token Limit: 1,048,576
+   Output Token Limit: 8,192
+
+Model: models/gemini-2.0-pro-exp
+   Display Name: Gemini 2.0 Pro Experimental
+   Description: Experimental release (March 25th, 2025) of Gemini 2.5 Pro
+   Supported Methods: ['generateContent', 'countTokens', 'createCachedContent', 'batchGenerateContent']
+   Input Token Limit: 1,048,576
+   Output Token Limit: 65,536
+
+Model: models/gemini-2.0-pro-exp-02-05
+   Display Name: Gemini 2.0 Pro Experimental 02-05
+   Description: Experimental release (March 25th, 2025) of Gemini 2.5 Pro
+   Supported Methods: ['generateContent', 'countTokens', 'createCachedContent', 'batchGenerateContent']
+   Input Token Limit: 1,048,576
+   Output Token Limit: 65,536
+
+Model: models/gemini-exp-1206
+   Display Name: Gemini Experimental 1206
+   Description: Experimental release (March 25th, 2025) of Gemini 2.5 Pro
+   Supported Methods: ['generateContent', 'countTokens', 'createCachedContent', 'batchGenerateContent']
+   Input Token Limit: 1,048,576
+   Output Token Limit: 65,536
+
+Model: models/gemini-2.0-flash-thinking-exp-01-21
+   Display Name: Gemini 2.5 Flash Preview 05-20
+   Description: Preview release (April 17th, 2025) of Gemini 2.5 Flash
+   Supported Methods: ['generateContent', 'countTokens', 'createCachedContent', 'batchGenerateContent']
+   Input Token Limit: 1,048,576
+   Output Token Limit: 65,536
+
+Model: models/gemini-2.0-flash-thinking-exp
+   Display Name: Gemini 2.5 Flash Preview 05-20
+   Description: Preview release (April 17th, 2025) of Gemini 2.5 Flash
+   Supported Methods: ['generateContent', 'countTokens', 'createCachedContent', 'batchGenerateContent']
+   Input Token Limit: 1,048,576
+   Output Token Limit: 65,536
+
+Model: models/gemini-2.0-flash-thinking-exp-1219
+   Display Name: Gemini 2.5 Flash Preview 05-20
+   Description: Preview release (April 17th, 2025) of Gemini 2.5 Flash
+   Supported Methods: ['generateContent', 'countTokens', 'createCachedContent', 'batchGenerateContent']
+   Input Token Limit: 1,048,576
+   Output Token Limit: 65,536
+
+Model: models/gemini-2.5-flash-preview-tts
+   Display Name: Gemini 2.5 Flash Preview TTS
+   Description: Gemini 2.5 Flash Preview TTS
+   Supported Methods: ['countTokens', 'generateContent']
+   Input Token Limit: 8,192
+   Output Token Limit: 16,384
+
+Model: models/gemini-2.5-pro-preview-tts
+   Display Name: Gemini 2.5 Pro Preview TTS
+   Description: Gemini 2.5 Pro Preview TTS
+   Supported Methods: ['countTokens', 'generateContent']
+   Input Token Limit: 8,192
+   Output Token Limit: 16,384
+
+Model: models/learnlm-2.0-flash-experimental
+   Display Name: LearnLM 2.0 Flash Experimental
+   Description: LearnLM 2.0 Flash Experimental
+   Supported Methods: ['generateContent', 'countTokens']
+   Input Token Limit: 1,048,576
+   Output Token Limit: 32,768
+
+Model: models/gemma-3-1b-it
+   Display Name: Gemma 3 1B
+   Description: 
+   Supported Methods: ['generateContent', 'countTokens']
+   Input Token Limit: 32,768
+   Output Token Limit: 8,192
+
+Model: models/gemma-3-4b-it
+   Display Name: Gemma 3 4B
+   Description: 
+   Supported Methods: ['generateContent', 'countTokens']
+   Input Token Limit: 32,768
+   Output Token Limit: 8,192
+
+Model: models/gemma-3-12b-it
+   Display Name: Gemma 3 12B
+   Description: 
+   Supported Methods: ['generateContent', 'countTokens']
+   Input Token Limit: 32,768
+   Output Token Limit: 8,192
+
+Model: models/gemma-3-27b-it
+   Display Name: Gemma 3 27B
+   Description: 
+   Supported Methods: ['generateContent', 'countTokens']
+   Input Token Limit: 131,072
+   Output Token Limit: 8,192
+
+Model: models/gemma-3n-e4b-it
+   Display Name: Gemma 3n E4B
+   Description: 
+   Supported Methods: ['generateContent', 'countTokens']
+   Input Token Limit: 8,192
+   Output Token Limit: 2,048
+
+Model: models/gemma-3n-e2b-it
+   Display Name: Gemma 3n E2B
+   Description: 
+   Supported Methods: ['generateContent', 'countTokens']
+   Input Token Limit: 8,192
+   Output Token Limit: 2,048
+
+Model: models/gemini-flash-latest
+   Display Name: Gemini Flash Latest
+   Description: Latest release of Gemini Flash
+   Supported Methods: ['generateContent', 'countTokens', 'createCachedContent', 'batchGenerateContent']
+   Input Token Limit: 1,048,576
+   Output Token Limit: 65,536
+
+Model: models/gemini-flash-lite-latest
+   Display Name: Gemini Flash-Lite Latest
+   Description: Latest release of Gemini Flash-Lite
+   Supported Methods: ['generateContent', 'countTokens', 'createCachedContent', 'batchGenerateContent']
+   Input Token Limit: 1,048,576
+   Output Token Limit: 65,536
+
+Model: models/gemini-pro-latest
+   Display Name: Gemini Pro Latest
+   Description: Latest release of Gemini Pro
+   Supported Methods: ['generateContent', 'countTokens', 'createCachedContent', 'batchGenerateContent']
+   Input Token Limit: 1,048,576
+   Output Token Limit: 65,536
+
+Model: models/gemini-2.5-flash-lite
+   Display Name: Gemini 2.5 Flash-Lite
+   Description: Stable version of Gemini 2.5 Flash-Lite, released in July of 2025
+   Supported Methods: ['generateContent', 'countTokens', 'createCachedContent', 'batchGenerateContent']
+   Input Token Limit: 1,048,576
+   Output Token Limit: 65,536
+
+Model: models/gemini-2.5-flash-image-preview
+   Display Name: Nano Banana
+   Description: Gemini 2.5 Flash Preview Image
+   Supported Methods: ['generateContent', 'countTokens']
+   Input Token Limit: 32,768
+   Output Token Limit: 8,192
+
+Model: models/gemini-2.5-flash-image
+   Display Name: Nano Banana
+   Description: Gemini 2.5 Flash Preview Image
+   Supported Methods: ['generateContent', 'countTokens']
+   Input Token Limit: 32,768
+   Output Token Limit: 8,192
+
+Model: models/gemini-2.5-flash-preview-09-2025
+   Display Name: Gemini 2.5 Flash Preview Sep 2025
+   Description: Gemini 2.5 Flash Preview Sep 2025
+   Supported Methods: ['generateContent', 'countTokens', 'createCachedContent', 'batchGenerateContent']
+   Input Token Limit: 1,048,576
+   Output Token Limit: 65,536
+
+Model: models/gemini-2.5-flash-lite-preview-09-2025
+   Display Name: Gemini 2.5 Flash-Lite Preview Sep 2025
+   Description: Preview release (Septempber 25th, 2025) of Gemini 2.5 Flash-Lite
+   Supported Methods: ['generateContent', 'countTokens', 'createCachedContent', 'batchGenerateContent']
+   Input Token Limit: 1,048,576
+   Output Token Limit: 65,536
+
+Model: models/gemini-robotics-er-1.5-preview
+   Display Name: Gemini Robotics-ER 1.5 Preview
+   Description: Gemini Robotics-ER 1.5 Preview
+   Supported Methods: ['generateContent', 'countTokens']
+   Input Token Limit: 1,048,576
+   Output Token Limit: 65,536
+
+Model: models/gemini-2.5-computer-use-preview-10-2025
+   Display Name: Gemini 2.5 Computer Use Preview 10-2025
+   Description: Gemini 2.5 Computer Use Preview 10-2025
+   Supported Methods: ['generateContent', 'countTokens']
+   Input Token Limit: 131,072
+   Output Token Limit: 65,536
+
+Model: models/embedding-001
+   Display Name: Embedding 001
+   Description: Obtain a distributed representation of a text.
+   Supported Methods: ['embedContent']
+   Input Token Limit: 2,048
+   Output Token Limit: 1
+
+Model: models/text-embedding-004
+   Display Name: Text Embedding 004
+   Description: Obtain a distributed representation of a text.
+   Supported Methods: ['embedContent']
+   Input Token Limit: 2,048
+   Output Token Limit: 1
+
+Model: models/gemini-embedding-exp-03-07
+   Display Name: Gemini Embedding Experimental 03-07
+   Description: Obtain a distributed representation of a text.
+   Supported Methods: ['embedContent', 'countTextTokens', 'countTokens']
+   Input Token Limit: 8,192
+   Output Token Limit: 1
+
+Model: models/gemini-embedding-exp
+   Display Name: Gemini Embedding Experimental
+   Description: Obtain a distributed representation of a text.
+   Supported Methods: ['embedContent', 'countTextTokens', 'countTokens']
+   Input Token Limit: 8,192
+   Output Token Limit: 1
+
+Model: models/gemini-embedding-001
+   Display Name: Gemini Embedding 001
+   Description: Obtain a distributed representation of a text.
+   Supported Methods: ['embedContent', 'countTextTokens', 'countTokens', 'asyncBatchEmbedContent']
+   Input Token Limit: 2,048
+   Output Token Limit: 1
+
+Model: models/aqa
+   Display Name: Model that performs Attributed Question Answering.
+   Description: Model trained to return answers to questions that are grounded in provided sources, along with estimating answerable probability.
+   Supported Methods: ['generateAnswer']
+   Input Token Limit: 7,168
+   Output Token Limit: 1,024
+
+Model: models/imagen-3.0-generate-002
+   Display Name: Imagen 3.0
+   Description: Vertex served Imagen 3.0 002 model
+   Supported Methods: ['predict']
+   Input Token Limit: 480
+   Output Token Limit: 8,192
+
+Model: models/imagen-4.0-generate-preview-06-06
+   Display Name: Imagen 4 (Preview)
+   Description: Vertex served Imagen 4.0 model
+   Supported Methods: ['predict']
+   Input Token Limit: 480
+   Output Token Limit: 8,192
+
+Model: models/imagen-4.0-ultra-generate-preview-06-06
+   Display Name: Imagen 4 Ultra (Preview)
+   Description: Vertex served Imagen 4.0 ultra model
+   Supported Methods: ['predict']
+   Input Token Limit: 480
+   Output Token Limit: 8,192
+
+Model: models/imagen-4.0-generate-001
+   Display Name: Imagen 4
+   Description: Vertex served Imagen 4.0 model
+   Supported Methods: ['predict']
+   Input Token Limit: 480
+   Output Token Limit: 8,192
+
+Model: models/imagen-4.0-ultra-generate-001
+   Display Name: Imagen 4 Ultra
+   Description: Vertex served Imagen 4.0 ultra model
+   Supported Methods: ['predict']
+   Input Token Limit: 480
+   Output Token Limit: 8,192
+
+Model: models/imagen-4.0-fast-generate-001
+   Display Name: Imagen 4 Fast
+   Description: Vertex served Imagen 4.0 Fast model
+   Supported Methods: ['predict']
+   Input Token Limit: 480
+   Output Token Limit: 8,192
+
+Model: models/veo-2.0-generate-001
+   Display Name: Veo 2
+   Description: Vertex served Veo 2 model. Access to this model requires billing to be enabled on the associated Google Cloud Platform account. Please visit https://console.cloud.google.com/billing to enable it.
+   Supported Methods: ['predictLongRunning']
+   Input Token Limit: 480
+   Output Token Limit: 8,192
+
+Model: models/veo-3.0-generate-preview
+   Display Name: Veo 3
+   Description: Veo 3 preview.
+   Supported Methods: ['predictLongRunning']
+   Input Token Limit: 480
+   Output Token Limit: 8,192
+
+Model: models/veo-3.0-fast-generate-preview
+   Display Name: Veo 3 fast
+   Description: Veo 3 fast preview.
+   Supported Methods: ['predictLongRunning']
+   Input Token Limit: 480
+   Output Token Limit: 8,192
+
+Model: models/veo-3.0-generate-001
+   Display Name: Veo 3
+   Description: Veo 3
+   Supported Methods: ['predictLongRunning']
+   Input Token Limit: 480
+   Output Token Limit: 8,192
+
+Model: models/veo-3.0-fast-generate-001
+   Display Name: Veo 3 fast
+   Description: Veo 3 fast
+   Supported Methods: ['predictLongRunning']
+   Input Token Limit: 480
+   Output Token Limit: 8,192
+
+Model: models/gemini-2.5-flash-preview-native-audio-dialog
+   Display Name: Gemini 2.5 Flash Preview Native Audio Dialog
+   Description: Gemini 2.5 Flash Preview Native Audio Dialog
+   Supported Methods: ['countTokens', 'bidiGenerateContent']
+   Input Token Limit: 131,072
+   Output Token Limit: 8,192
+
+Model: models/gemini-2.5-flash-exp-native-audio-thinking-dialog
+   Display Name: Gemini 2.5 Flash Exp Native Audio Thinking Dialog
+   Description: Gemini 2.5 Flash Exp Native Audio Thinking Dialog
+   Supported Methods: ['countTokens', 'bidiGenerateContent']
+   Input Token Limit: 131,072
+   Output Token Limit: 8,192
+
+Model: models/gemini-2.0-flash-live-001
+   Display Name: Gemini 2.0 Flash 001
+   Description: Gemini 2.0 Flash 001
+   Supported Methods: ['bidiGenerateContent', 'countTokens']
+   Input Token Limit: 131,072
+   Output Token Limit: 8,192
+
+Model: models/gemini-live-2.5-flash-preview
+   Display Name: Gemini Live 2.5 Flash Preview
+   Description: Gemini Live 2.5 Flash Preview
+   Supported Methods: ['bidiGenerateContent', 'countTokens']
+   Input Token Limit: 1,048,576
+   Output Token Limit: 65,536
+
+Model: models/gemini-2.5-flash-live-preview
+   Display Name: Gemini 2.5 Flash Live Preview
+   Description: Gemini 2.5 Flash Live Preview
+   Supported Methods: ['bidiGenerateContent', 'countTokens']
+   Input Token Limit: 1,048,576
+   Output Token Limit: 65,536
+
+Model: models/gemini-2.5-flash-native-audio-latest
+   Display Name: Gemini 2.5 Flash Native Audio Latest
+   Description: Latest release of Gemini 2.5 Flash Native Audio
+   Supported Methods: ['countTokens', 'bidiGenerateContent']
+   Input Token Limit: 131,072
+   Output Token Limit: 8,192
+
+Model: models/gemini-2.5-flash-native-audio-preview-09-2025
+   Display Name: Gemini 2.5 Flash Native Audio Preview 09-2025
+   Description: Gemini 2.5 Flash Native Audio Preview 09-2025
+   Supported Methods: ['countTokens', 'bidiGenerateContent']
+   Input Token Limit: 131,072
+   Output Token Limit: 8,192
+
+================================================================================
+
+IMAGE GENERATION MODELS FOUND:
+================================================================================
+
+models/gemini-2.5-flash-image-preview
+   Display: Nano Banana
+   Methods: ['generateContent', 'countTokens']
+
+models/gemini-2.5-flash-image
+   Display: Nano Banana
+   Methods: ['generateContent', 'countTokens']
+
+models/imagen-3.0-generate-002
+   Display: Imagen 3.0
+   Methods: ['predict']
+
+models/imagen-4.0-generate-preview-06-06
+   Display: Imagen 4 (Preview)
+   Methods: ['predict']
+
+models/imagen-4.0-ultra-generate-preview-06-06
+   Display: Imagen 4 Ultra (Preview)
+   Methods: ['predict']
+
+models/imagen-4.0-generate-001
+   Display: Imagen 4
+   Methods: ['predict']
+
+models/imagen-4.0-ultra-generate-001
+   Display: Imagen 4 Ultra
+   Methods: ['predict']
+
+models/imagen-4.0-fast-generate-001
+   Display: Imagen 4 Fast
+   Methods: ['predict']
+
+================================================================================
+
+Done! Check the image models above

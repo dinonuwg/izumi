@@ -1,7 +1,13 @@
 """
-Image Generation System using Gemini 2.5 Flash Image (Nano Banana)
-Handles image generation, editing, and vision capabilities
+Image Generation System using Gemini 2.5 Flash Image models (Nano Banana)
+Handles image generation, editing, and vision capabilities with automatic fallback
 Available on free tier!
+
+Features:
+- Multiple model fallback system (tries preview model first, then stable)
+- Automatic model switching if one fails or hits rate limits
+- Usage tracking (estimated 100/day limit for free tier)
+- Profile picture editing and image manipulation
 """
 
 import discord
@@ -19,17 +25,17 @@ class ImageGenerationCog(commands.Cog, name="ImageGen"):
     def __init__(self, bot):
         self.bot = bot
         
-        # Initialize Gemini 2.0 Flash for image generation
-        self.image_model = None
-        self._setup_image_model()
+        # Initialize multiple image generation models as fallbacks
+        self.image_models = []
+        self._setup_image_models()
         
         # Track daily usage
         self.usage_data = self._load_usage_data()
         self.daily_generations = self.usage_data.get('daily_generations', 0)
         self.last_reset = self.usage_data.get('last_reset', time.time())
         
-    def _setup_image_model(self):
-        """Initialize Gemini 2.0 Flash Preview Image Generation model"""
+    def _setup_image_models(self):
+        """Initialize all available image generation models with fallback support"""
         try:
             api_key = os.getenv('GEMINI_API_KEY')
             if not api_key:
@@ -38,13 +44,35 @@ class ImageGenerationCog(commands.Cog, name="ImageGen"):
             
             genai.configure(api_key=api_key)
             
-            # Use Gemini 2.5 Flash Image (available on free tier - confirmed by models list!)
-            # This model supports both text and image generation
-            self.image_model = genai.GenerativeModel('gemini-2.5-flash-image')
-            print("✅ Gemini 2.5 Flash Image model initialized (Free tier available!)")
+            # List of Gemini image generation models to try (in order of preference)
+            # Preview version first (usually has latest features), then stable
+            model_configs = [
+                ('gemini-2.5-flash-image-preview', 'Gemini 2.5 Flash Image Preview'),
+                ('gemini-2.5-flash-image', 'Gemini 2.5 Flash Image (Stable)'),
+            ]
+            
+            # Try to initialize each model
+            for model_name, display_name in model_configs:
+                try:
+                    model = genai.GenerativeModel(model_name)
+                    self.image_models.append({
+                        'model': model,
+                        'name': model_name,
+                        'display_name': display_name,
+                        'failures': 0,  # Track consecutive failures for fallback
+                        'last_error': None
+                    })
+                    print(f"✅ {display_name} initialized")
+                except Exception as e:
+                    print(f"⚠️ Could not initialize {display_name}: {e}")
+            
+            if not self.image_models:
+                print("❌ No image generation models available!")
+            else:
+                print(f"🎨 {len(self.image_models)} image generation models ready with fallback support")
             
         except Exception as e:
-            print(f"❌ Failed to initialize image model: {e}")
+            print(f"❌ Failed to initialize image models: {e}")
     
     def _load_usage_data(self):
         """Load usage tracking data"""
@@ -84,58 +112,72 @@ class ImageGenerationCog(commands.Cog, name="ImageGen"):
         return None
     
     async def generate_image(self, prompt: str, reference_image: Image.Image = None) -> bytes:
-        """Generate or edit an image using Gemini 2.0 Flash"""
-        if not self.image_model:
-            print("❌ Image model not initialized")
+        """Generate or edit an image using available models with automatic fallback"""
+        if not self.image_models:
+            print("❌ No image models initialized")
             return None
         
         if not self.can_generate_image():
             print("⚠️ Daily image generation limit reached (100/day)")
             return None
         
-        try:
-            print(f"🎨 Attempting image generation with prompt: {prompt[:100]}")
-            
-            # Gemini 2.0 Flash Experimental has image generation
-            # The correct way to request image generation
-            if reference_image:
-                # Image editing mode - provide both prompt and reference
-                full_prompt = f"Based on this image, {prompt}. Generate a new image that applies these changes."
-                response = self.image_model.generate_content(
-                    [full_prompt, reference_image]
-                )
-            else:
-                # Pure generation mode
-                response = self.image_model.generate_content(
-                    prompt
-                )
-            
-            print(f"📥 Response received, checking for image data...")
-            print(f"Response parts: {len(response.parts) if response.parts else 0}")
-            
-            # Increment usage counter
-            self.daily_generations += 1
-            self._save_usage_data()
-            
-            # Extract image from response
-            if response.parts:
-                for i, part in enumerate(response.parts):
-                    print(f"Part {i}: {type(part)}, has inline_data: {hasattr(part, 'inline_data')}")
-                    if hasattr(part, 'inline_data') and part.inline_data:
-                        if hasattr(part.inline_data, 'data'):
-                            print(f"✅ Found image data in part {i}")
-                            return part.inline_data.data
-                        if hasattr(part.inline_data, 'mime_type'):
-                            print(f"Mime type: {part.inline_data.mime_type}")
-            
-            print("❌ No image data found in response")
-            return None
-            
-        except Exception as e:
-            print(f"❌ Image generation error: {type(e).__name__}: {e}")
-            import traceback
-            traceback.print_exc()
-            return None
+        # Try each model in order until one succeeds
+        for model_info in self.image_models:
+            # Skip models that have failed too many times
+            if model_info['failures'] >= 3:
+                continue
+                
+            try:
+                model_name = model_info['display_name']
+                print(f"🎨 Attempting image generation with {model_name}")
+                print(f"   Prompt: {prompt[:100]}")
+                
+                # Prepare content for generation
+                if reference_image:
+                    # Image editing mode - provide both prompt and reference
+                    full_prompt = f"Based on this image, {prompt}. Generate a new image that applies these changes."
+                    content = [full_prompt, reference_image]
+                else:
+                    # Pure generation mode
+                    content = prompt
+                
+                # Try to generate image
+                response = model_info['model'].generate_content(content)
+                
+                print(f"📥 Response received from {model_name}")
+                print(f"   Response parts: {len(response.parts) if response.parts else 0}")
+                
+                # Extract image from response
+                if response.parts:
+                    for i, part in enumerate(response.parts):
+                        if hasattr(part, 'inline_data') and part.inline_data:
+                            if hasattr(part.inline_data, 'data'):
+                                print(f"✅ Successfully generated image with {model_name}")
+                                
+                                # Reset failure counter on success
+                                model_info['failures'] = 0
+                                
+                                # Increment usage counter
+                                self.daily_generations += 1
+                                self._save_usage_data()
+                                
+                                return part.inline_data.data
+                
+                print(f"⚠️ {model_name} returned no image data, trying next model...")
+                model_info['failures'] += 1
+                
+            except Exception as e:
+                error_msg = f"{type(e).__name__}: {str(e)}"
+                print(f"❌ {model_name} failed: {error_msg}")
+                model_info['failures'] += 1
+                model_info['last_error'] = error_msg
+                
+                # Continue to next model
+                continue
+        
+        # All models failed
+        print("❌ All image generation models failed")
+        return None
     
     def detect_image_request(self, message_content: str) -> dict:
         """Detect if user wants image generation/editing"""
@@ -257,9 +299,9 @@ class ImageGenerationCog(commands.Cog, name="ImageGen"):
             print(f"Error in generate command: {e}")
             await interaction.followup.send("❌ Error generating image")
     
-    @app_commands.command(name="imagestats", description="Check image generation usage stats")
+    @app_commands.command(name="imagestats", description="Check image generation usage stats and model status")
     async def image_stats(self, interaction: discord.Interaction):
-        """Show image generation statistics"""
+        """Show image generation statistics and available models"""
         self._check_and_reset_daily_limit()
         
         remaining = 100 - self.daily_generations
@@ -267,11 +309,31 @@ class ImageGenerationCog(commands.Cog, name="ImageGen"):
         
         embed = discord.Embed(
             title="📊 Image Generation Stats",
+            description="**Note:** Free tier limits are not officially documented. The 100/day limit is a tracking estimate.",
             color=discord.Color.blue()
         )
         embed.add_field(name="Used Today", value=f"{self.daily_generations}/100", inline=True)
         embed.add_field(name="Remaining", value=str(remaining), inline=True)
         embed.add_field(name="Resets In", value=f"{hours_until_reset:.1f} hours", inline=True)
+        
+        # Show model status
+        if self.image_models:
+            model_status = []
+            for i, model_info in enumerate(self.image_models, 1):
+                status = "✅ Active" if model_info['failures'] < 3 else "❌ Disabled (too many failures)"
+                model_status.append(f"**{i}.** {model_info['display_name']}\n   Status: {status}")
+                if model_info['last_error']:
+                    model_status.append(f"   Last Error: `{model_info['last_error'][:50]}`")
+            
+            embed.add_field(
+                name="🤖 Available Models",
+                value="\n".join(model_status) if model_status else "None",
+                inline=False
+            )
+        else:
+            embed.add_field(name="🤖 Available Models", value="❌ No models initialized", inline=False)
+        
+        embed.set_footer(text="Tip: The bot automatically falls back to alternative models if one fails!")
         
         await interaction.response.send_message(embed=embed)
 
