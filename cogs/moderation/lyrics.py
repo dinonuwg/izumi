@@ -80,24 +80,76 @@ class LyricsCog(commands.Cog, name="Lyrics"):
         
         return None
     
+    @commands.command(name="addsong", aliases=["addlyrics", "newsong"])
+    @commands.has_permissions(administrator=True)
+    async def add_song_prefix(self, ctx: commands.Context, artist: str, title: str, *, lyrics: str):
+        """Add a song to the lyrics database - Usage: !addsong "Artist Name" "Song Title" [paste lyrics here]"""
+        
+        # Split lyrics by newlines
+        lyric_lines = [line.strip() for line in lyrics.split('\n') if line.strip()]
+        
+        if len(lyric_lines) < 2:
+            await ctx.send(
+                "❌ Please provide at least 2 lines of lyrics!\n"
+                "**Usage:** `!addsong \"Artist\" \"Song Title\" [paste full lyrics]`\n"
+                "**Example:**\n```\n!addsong \"Yael Naim\" \"New Soul\"\n"
+                "I'm a new soul, I came to this strange world\n"
+                "Hoping I could learn a bit 'bout how to give and take\n"
+                "But since I came here, felt the joy and the fear\n```"
+            )
+            return
+        
+        # Check if song already exists
+        for song in self.lyrics_database.get('songs', []):
+            if song['title'].lower() == title.lower() and song['artist'].lower() == artist.lower():
+                await ctx.send(f"❌ Song **{title}** by **{artist}** already exists in the database!")
+                return
+        
+        # Add new song
+        new_song = {
+            "title": title,
+            "artist": artist,
+            "lyrics": lyric_lines
+        }
+        
+        if 'songs' not in self.lyrics_database:
+            self.lyrics_database['songs'] = []
+        
+        self.lyrics_database['songs'].append(new_song)
+        self._save_lyrics()
+        
+        embed = discord.Embed(
+            title="✅ Song Added to Database",
+            description=f"**{title}** by **{artist}**",
+            color=discord.Color.green()
+        )
+        embed.add_field(name="📝 Total Lines", value=str(len(lyric_lines)), inline=True)
+        embed.add_field(name="🎵 Preview", value=f"*{lyric_lines[0][:100]}...*", inline=False)
+        
+        if len(lyric_lines) > 1:
+            embed.add_field(name="Next Line", value=f"*{lyric_lines[1][:100]}...*", inline=False)
+        
+        embed.set_footer(text="Izumi can now continue this song when people sing it!")
+        
+        await ctx.send(embed=embed)
+    
     @app_commands.command(name="addsong", description="Add a song to the lyrics database (Admin only)")
     @app_commands.describe(
         title="Song title",
         artist="Artist name",
-        lyrics="Song lyrics (separate lines with | symbol)"
+        lyrics="Song lyrics (paste each line separated by newlines)"
     )
     @app_commands.checks.has_permissions(administrator=True)
     async def add_song(self, interaction: discord.Interaction, title: str, artist: str, lyrics: str):
-        """Add a new song to the lyrics database"""
+        """Add a new song to the lyrics database (slash command version)"""
         
-        # Split lyrics by | symbol
-        lyric_lines = [line.strip() for line in lyrics.split('|') if line.strip()]
+        # Split lyrics by newlines
+        lyric_lines = [line.strip() for line in lyrics.split('\n') if line.strip()]
         
         if len(lyric_lines) < 2:
             await interaction.response.send_message(
-                "❌ Please provide at least 2 lines of lyrics separated by | symbol\n"
-                "Example: `/addsong title:\"Never Gonna Give You Up\" artist:\"Rick Astley\" "
-                "lyrics:\"Never gonna give you up | Never gonna let you down | Never gonna run around and desert you\"`",
+                "❌ Please provide at least 2 lines of lyrics separated by newlines\n"
+                "**Tip:** Use the prefix command `!addsong` for easier pasting of multi-line lyrics!",
                 ephemeral=True
             )
             return
@@ -251,6 +303,59 @@ class LyricsCog(commands.Cog, name="Lyrics"):
             embed.set_footer(text=f"Showing 5 of {len(matching_songs)} results")
         
         await interaction.response.send_message(embed=embed)
+    
+    @commands.command(name="lyricshelp", aliases=["songhelp"])
+    async def lyrics_help(self, ctx: commands.Context):
+        """Show how to use the lyrics system"""
+        embed = discord.Embed(
+            title="🎵 Lyrics System Guide",
+            description="Teach Izumi songs so she can continue them when people sing!",
+            color=discord.Color.blue()
+        )
+        
+        embed.add_field(
+            name="📝 Adding Songs (Easy Method)",
+            value=(
+                "```\n"
+                "!addsong \"Artist\" \"Song Title\"\n"
+                "[paste full lyrics here]\n"
+                "```\n"
+                "**Example:**\n"
+                "```\n"
+                "!addsong \"Rick Astley\" \"Never Gonna Give You Up\"\n"
+                "Never gonna give you up\n"
+                "Never gonna let you down\n"
+                "Never gonna run around and desert you\n"
+                "```"
+            ),
+            inline=False
+        )
+        
+        embed.add_field(
+            name="🎤 How It Works",
+            value=(
+                "Once a song is added:\n"
+                "• Users sing a line from the song\n"
+                "• Izumi detects it (70% match accuracy)\n"
+                "• She continues with the next line naturally!\n"
+                "• Sometimes adds fun comments about the song"
+            ),
+            inline=False
+        )
+        
+        embed.add_field(
+            name="📋 Other Commands",
+            value=(
+                "`!listsongs` - View all songs\n"
+                "`/searchsong [query]` - Find a song\n"
+                "`/removesong [title]` - Remove a song\n"
+            ),
+            inline=False
+        )
+        
+        embed.set_footer(text="💡 Tip: Just copy-paste lyrics from any lyrics site!")
+        
+        await ctx.send(embed=embed)
 
 async def setup(bot):
     await bot.add_cog(LyricsCog(bot))

@@ -377,7 +377,7 @@ class IzumiAI(commands.Cog):
         return len(intersection) / len(union) if union else 0.0
     
     async def _check_for_lyrics(self, message: discord.Message) -> bool:
-        """Check if message contains song lyrics and respond with continuation"""
+        """Check if message contains song lyrics and inject context for AI response"""
         # Get lyrics cog
         lyrics_cog = self.bot.get_cog('Lyrics')
         if not lyrics_cog:
@@ -387,28 +387,23 @@ class IzumiAI(commands.Cog):
         match = lyrics_cog.find_matching_lyric(message.content)
         
         if match and match['confidence'] >= 0.75:  # High confidence match
-            print(f"🎵 Detected lyrics from '{match['song']}' by {match['artist']}")
+            print(f"🎵 Detected lyrics from '{match['song']}' by {match['artist']} - feeding to AI")
             
             # Random chance to respond (70% chance to make it feel natural, not every time)
             if random.randint(1, 100) <= 70:
-                # Add typing delay for natural feel
-                await self._type_with_delay(message.channel, match['next_line'])
+                # Store lyrics context temporarily for this message
+                if not hasattr(self, '_lyrics_context'):
+                    self._lyrics_context = {}
                 
-                # Send the next line
-                await message.channel.send(match['next_line'])
+                self._lyrics_context[message.id] = match
                 
-                # Occasionally add a comment about the song (20% chance)
-                if random.randint(1, 100) <= 20:
-                    comments = [
-                        f"love that song! 🎵",
-                        f"*vibes to {match['song']}* ✨",
-                        f"omg {match['artist']} is so good",
-                        f"this song is such a bop",
-                        f"*continues singing*",
-                        f"great taste in music!"
-                    ]
-                    await asyncio.sleep(1.5)
-                    await message.channel.send(random.choice(comments))
+                # Trigger AI response with lyrics context
+                await self._handle_ai_response(message, is_lyrics=True)
+                
+                # Clean up context after a delay
+                await asyncio.sleep(30)
+                if message.id in self._lyrics_context:
+                    del self._lyrics_context[message.id]
                 
                 return True
         
@@ -684,26 +679,29 @@ class IzumiAI(commands.Cog):
         instruction = instructions.get(continuation_type, instructions["general"])
         return f"{base_prompt}Instruction: {instruction}"
     
-    async def _handle_ai_response(self, message: discord.Message):
+    async def _handle_ai_response(self, message: discord.Message, is_lyrics: bool = False):
         """Generate and send AI response with delay to catch follow-up messages"""
         if not self.gemini_model:
             return
         
         # Check if we recently responded to this user (prevent spam responses)
-        user_id = message.author.id
-        current_time = time.time()
-        
-        if user_id in self.recent_responses:
-            time_since_last_response = current_time - self.recent_responses[user_id]
-            if time_since_last_response < 15:  # Minimum 15 seconds between responses to same user
-                print(f"⏳ Skipping response to {message.author.display_name} - responded {time_since_last_response:.1f}s ago")
-                return
-        
-        # Mark that we're about to respond to this user
-        self.recent_responses[user_id] = current_time
+        # Skip this check for lyrics responses
+        if not is_lyrics:
+            user_id = message.author.id
+            current_time = time.time()
+            
+            if user_id in self.recent_responses:
+                time_since_last_response = current_time - self.recent_responses[user_id]
+                if time_since_last_response < 15:  # Minimum 15 seconds between responses to same user
+                    print(f"⏳ Skipping response to {message.author.display_name} - responded {time_since_last_response:.1f}s ago")
+                    return
+            
+            # Mark that we're about to respond to this user
+            self.recent_responses[user_id] = current_time
 
-        # Wait 4 seconds to collect any follow-up messages from the same user
-        await asyncio.sleep(4)
+        # Wait 4 seconds to collect any follow-up messages (skip for lyrics)
+        if not is_lyrics:
+            await asyncio.sleep(4)
         
         # Collect recent messages from the same user in the last 10 seconds
         recent_messages = await self._collect_recent_user_messages(message)
@@ -764,11 +762,26 @@ class IzumiAI(commands.Cog):
                 channel_id=message.channel.id
             )
             
+            # Check for lyrics context
+            lyrics_context = ""
+            if is_lyrics and hasattr(self, '_lyrics_context') and message.id in self._lyrics_context:
+                match = self._lyrics_context[message.id]
+                lyrics_context = (
+                    f"\n\n🎵 SONG DETECTED: The user just sang part of '{match['song']}' by {match['artist']}! "
+                    f"They sang: '{match['current_line']}'\n"
+                    f"The next line of the song is: '{match['next_line']}'\n"
+                    f"You should continue the song naturally! You can either:\n"
+                    f"1. Just sing the next line: '{match['next_line']}'\n"
+                    f"2. Sing it with enthusiasm: '*continues singing* {match['next_line']}'\n"
+                    f"3. Sing and add a comment: '{match['next_line']} omg love this song!'\n"
+                    f"Make it feel natural and fun, like you're vibing to music with them!"
+                )
+            
             # Create full prompt with proper conversation context labeling
             if len(recent_messages) > 1:
-                full_prompt = f"{context}\n\nRecent conversation:\n{processed_prompt}\n\nPlease respond to the full conversation context above."
+                full_prompt = f"{context}{lyrics_context}\n\nRecent conversation:\n{processed_prompt}\n\nPlease respond to the full conversation context above."
             else:
-                full_prompt = f"{context}\n\nUser message: {processed_prompt}"
+                full_prompt = f"{context}{lyrics_context}\n\nUser message: {processed_prompt}"
             
             # Generate response with fallback system
             response_text = await self._generate_response_with_fallback(
