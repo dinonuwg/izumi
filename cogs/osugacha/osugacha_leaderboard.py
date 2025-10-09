@@ -42,6 +42,7 @@ class OsuGachaLeaderboardsCog(commands.Cog, name="Osu Gacha Leaderboards"):
         app_commands.Choice(name="Daily Streak", value="daily_streak"),
         app_commands.Choice(name="Most Trades", value="total_trades")
     ])
+    @app_commands.default_permissions()  # Available to everyone (@everyone role)
     async def osu_leaderboard_slash(self, interaction: discord.Interaction, board_type: str = "currency"):
         await self._leaderboard_command(interaction, board_type)
 
@@ -51,8 +52,14 @@ class OsuGachaLeaderboardsCog(commands.Cog, name="Osu Gacha Leaderboards"):
         """Show collection leaderboards
         
         Available types:
-        currency, cards, value, five_star, mutations, opens, win_rate, 
-        gambles, profit, achievements, daily_streak, trades
+        richest, cards, collection, value, five_star, mutations, opens, 
+        win_rate, gambles, profit, achievements, daily_streak, trades
+        
+        Examples:
+        !olb richest - Show richest players
+        !olb cards - Show most cards
+        !olb collection - Same as cards
+        !olb mutations - Show most mutations
         """
         
         # Handle common aliases
@@ -60,15 +67,15 @@ class OsuGachaLeaderboardsCog(commands.Cog, name="Osu Gacha Leaderboards"):
             "rich": "currency", "richest": "currency", "coins": "currency", "money": "currency",
             "cards": "total_cards", "collection": "total_cards", "total": "total_cards",
             "value": "total_value", "worth": "total_value", "wealth": "total_value",
-            "five": "five_star", "5star": "five_star", "elite": "five_star",
-            "mutations": "mutations", "mutants": "mutations", "special": "mutations",
+            "five": "five_star", "5star": "five_star", "5": "five_star", "elite": "five_star",
+            "mutations": "mutations", "mutation": "mutations", "mutants": "mutations", "special": "mutations",
             "opens": "opens", "crates": "opens", "opened": "opens",
-            "winrate": "win_rate", "wins": "win_rate", "gambling": "win_rate",
-            "gambles": "total_gambles", "bets": "total_gambles", "games": "total_gambles",
+            "winrate": "win_rate", "wins": "win_rate", "win": "win_rate", "gambling": "win_rate",
+            "gambles": "total_gambles", "gamble": "total_gambles", "bets": "total_gambles", "games": "total_gambles",
             "profit": "gambling_profit", "earnings": "gambling_profit", "net": "gambling_profit",
-            "achievements": "achievements", "achieve": "achievements", "unlocks": "achievements",
+            "achievements": "achievements", "achievement": "achievements", "achieve": "achievements", "unlocks": "achievements",
             "daily": "daily_streak", "streak": "daily_streak", "days": "daily_streak",
-            "trades": "total_trades", "trading": "total_trades", "deals": "total_trades"
+            "trades": "total_trades", "trade": "total_trades", "trading": "total_trades", "deals": "total_trades"
         }
         
         resolved_type = aliases.get(board_type.lower(), board_type.lower())
