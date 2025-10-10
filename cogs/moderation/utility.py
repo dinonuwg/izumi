@@ -15,6 +15,8 @@ BOT_OWNER_ID = int(os.getenv("BOT_OWNER_ID", "0"))  # Default to 0 if not set
 class UtilityCog(commands.Cog, name="Utility"):
     def __init__(self, bot):
         self.bot = bot
+        # Track last message edit per channel
+        self.last_edits = {}  # Format: {channel_id: {"before": Message, "after": Message, "timestamp": float}}
 
     def parse_time_duration(self, time_str):
         """Parse various time formats into seconds"""
@@ -812,6 +814,106 @@ class UtilityCog(commands.Cog, name="Utility"):
                 inline=False
             )
             embed.set_footer(text="Showing server-specific avatar")
+        
+        # Send response
+        if is_slash:
+            await ctx_or_interaction.response.send_message(embed=embed)
+        else:
+            await ctx_or_interaction.send(embed=embed)
+
+    @commands.Cog.listener()
+    async def on_message_edit(self, before: discord.Message, after: discord.Message):
+        """Track message edits in channels"""
+        # Ignore bot messages and DMs
+        if before.author.bot or not before.guild:
+            return
+        
+        # Ignore if content didn't change (could be embed updates, pins, etc.)
+        if before.content == after.content:
+            return
+        
+        # Store the edit information
+        self.last_edits[before.channel.id] = {
+            "before": before,
+            "after": after,
+            "timestamp": time.time()
+        }
+
+    @app_commands.command(name="lastedit", description="Show the most recent message edit in this channel")
+    async def lastedit_slash(self, interaction: discord.Interaction):
+        """Show the most recent message edit in this channel"""
+        await self._handle_lastedit(interaction, True)
+
+    @commands.command(name="lastedit", aliases=["recentedit", "lastedit", "le"])
+    async def lastedit_prefix(self, ctx: commands.Context):
+        """Show the most recent message edit in this channel
+        
+        Usage: !lastedit
+        Shows the before/after of the most recent edited message in this channel.
+        """
+        await self._handle_lastedit(ctx, False)
+
+    async def _handle_lastedit(self, ctx_or_interaction, is_slash):
+        """Handle lastedit command for both slash and prefix commands"""
+        channel_id = ctx_or_interaction.channel.id
+        
+        # Check if we have any edits tracked for this channel
+        if channel_id not in self.last_edits:
+            msg = "No message edits have been tracked in this channel yet."
+            if is_slash:
+                await ctx_or_interaction.response.send_message(msg, ephemeral=True)
+            else:
+                await ctx_or_interaction.send(msg)
+            return
+        
+        edit_data = self.last_edits[channel_id]
+        before_msg = edit_data["before"]
+        after_msg = edit_data["after"]
+        edit_timestamp = edit_data["timestamp"]
+        
+        # Create embed
+        embed = discord.Embed(
+            title="Last Message Edit",
+            color=discord.Color.blue(),
+            timestamp=datetime.fromtimestamp(edit_timestamp, tz=timezone.utc)
+        )
+        
+        # Add user info
+        embed.set_author(
+            name=before_msg.author.display_name,
+            icon_url=before_msg.author.display_avatar.url
+        )
+        
+        # Add before content (truncate if too long)
+        before_content = before_msg.content
+        if len(before_content) > 1024:
+            before_content = before_content[:1021] + "..."
+        
+        embed.add_field(
+            name="Before",
+            value=before_content if before_content else "*[Empty message]*",
+            inline=False
+        )
+        
+        # Add after content (truncate if too long)
+        after_content = after_msg.content
+        if len(after_content) > 1024:
+            after_content = after_content[:1021] + "..."
+        
+        embed.add_field(
+            name="After",
+            value=after_content if after_content else "*[Empty message]*",
+            inline=False
+        )
+        
+        # Add message link
+        embed.add_field(
+            name="Message Link",
+            value=f"[Jump to Message]({after_msg.jump_url})",
+            inline=False
+        )
+        
+        embed.set_footer(text="Edited")
         
         # Send response
         if is_slash:
