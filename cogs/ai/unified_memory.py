@@ -726,7 +726,18 @@ class UnifiedMemorySystem:
             
             if append and field in user_data[section]:
                 if isinstance(user_data[section][field], list):
-                    if value not in user_data[section][field]:
+                    # Check for duplicates with case-insensitive comparison for strings
+                    is_duplicate = False
+                    if isinstance(value, str):
+                        value_lower = value.lower().strip()
+                        for existing in user_data[section][field]:
+                            if isinstance(existing, str) and existing.lower().strip() == value_lower:
+                                is_duplicate = True
+                                break
+                    else:
+                        is_duplicate = value in user_data[section][field]
+                    
+                    if not is_duplicate:
                         user_data[section][field].append(value)
                 else:
                     user_data[section][field] = [user_data[section][field], value]

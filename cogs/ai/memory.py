@@ -110,25 +110,34 @@ class MemoryManagement(commands.Cog):
         if basic_info:
             embed.add_field(name="Basic Info", value="\n".join(basic_info), inline=False)
         
-        # Personality & preferences
+        # Personality & preferences (limit to prevent embed size errors)
         if memories["interests"]:
+            interests_text = ", ".join(memories["interests"][:10])  # Limit to 10
+            if len(interests_text) > 1024:
+                interests_text = interests_text[:1021] + "..."
             embed.add_field(
                 name="Interests", 
-                value=", ".join(memories["interests"]), 
+                value=interests_text, 
                 inline=False
             )
         
         if memories["dislikes"]:
+            dislikes_text = ", ".join(memories["dislikes"][:10])  # Limit to 10
+            if len(dislikes_text) > 1024:
+                dislikes_text = dislikes_text[:1021] + "..."
             embed.add_field(
                 name="Dislikes", 
-                value=", ".join(memories["dislikes"]), 
+                value=dislikes_text, 
                 inline=False
             )
         
         if memories["personality_notes"]:
+            personality_text = ", ".join(memories["personality_notes"][:10])  # Limit to 10
+            if len(personality_text) > 1024:
+                personality_text = personality_text[:1021] + "..."
             embed.add_field(
                 name="Personality Notes", 
-                value=", ".join(memories["personality_notes"]), 
+                value=personality_text, 
                 inline=False
             )
         
@@ -150,16 +159,22 @@ class MemoryManagement(commands.Cog):
             )
         
         if memories["important_events"]:
+            events_text = "\n".join(memories["important_events"][:5])  # Limit to 5 events
+            if len(events_text) > 1024:
+                events_text = events_text[:1021] + "..."
             embed.add_field(
                 name="Important Events", 
-                value="\n".join(memories["important_events"]), 
+                value=events_text, 
                 inline=False
             )
         
         if memories["custom_notes"]:
+            notes_text = "\n".join(memories["custom_notes"][:10])  # Limit to 10 notes
+            if len(notes_text) > 1024:
+                notes_text = notes_text[:1021] + "..."
             embed.add_field(
                 name="Custom Notes", 
-                value="\n".join(memories["custom_notes"]), 
+                value=notes_text, 
                 inline=False
             )
         
@@ -176,9 +191,12 @@ class MemoryManagement(commands.Cog):
                     continue
             
             if relationship_info:
+                relationships_text = "\n".join(relationship_info[:5])  # Limit to 5
+                if len(relationships_text) > 1024:
+                    relationships_text = relationships_text[:1021] + "..."
                 embed.add_field(
                     name="Known Relationships",
-                    value="\n".join(relationship_info[:5]),  # Limit to 5
+                    value=relationships_text,
                     inline=False
                 )
         
@@ -195,9 +213,12 @@ class MemoryManagement(commands.Cog):
                     continue
             
             if shared_info:
+                shared_text = "\n".join(shared_info[:3])  # Limit to 3
+                if len(shared_text) > 1024:
+                    shared_text = shared_text[:1021] + "..."
                 embed.add_field(
                     name="Shared Experiences",
-                    value="\n".join(shared_info[:3]),  # Limit to 3
+                    value=shared_text,
                     inline=False
                 )
         
@@ -660,11 +681,21 @@ class MemoryManagement(commands.Cog):
                     if field in user_data['personality'] and isinstance(user_data['personality'][field], list):
                         original_list = user_data['personality'][field]
                         original_length = len(original_list)
-                        # Remove duplicates while preserving order
+                        # Remove duplicates (case-insensitive for strings) while preserving order
                         cleaned_list = []
+                        seen_lower = set()
                         for item in original_list:
-                            if item and item not in cleaned_list:  # Also skip empty items
-                                cleaned_list.append(item)
+                            if not item:  # Skip empty items
+                                continue
+                            # Case-insensitive duplicate check for strings
+                            if isinstance(item, str):
+                                item_lower = item.lower().strip()
+                                if item_lower not in seen_lower:
+                                    cleaned_list.append(item)
+                                    seen_lower.add(item_lower)
+                            else:
+                                if item not in cleaned_list:
+                                    cleaned_list.append(item)
                         
                         if len(cleaned_list) != original_length:
                             user_data['personality'][field] = cleaned_list
@@ -677,11 +708,21 @@ class MemoryManagement(commands.Cog):
                     if field in user_data['activity'] and isinstance(user_data['activity'][field], list):
                         original_list = user_data['activity'][field]
                         original_length = len(original_list)
-                        # Remove duplicates while preserving order
+                        # Remove duplicates (case-insensitive for strings) while preserving order
                         cleaned_list = []
+                        seen_lower = set()
                         for item in original_list:
-                            if item and item not in cleaned_list:  # Also skip empty items
-                                cleaned_list.append(item)
+                            if not item:  # Skip empty items
+                                continue
+                            # Case-insensitive duplicate check for strings
+                            if isinstance(item, str):
+                                item_lower = item.lower().strip()
+                                if item_lower not in seen_lower:
+                                    cleaned_list.append(item)
+                                    seen_lower.add(item_lower)
+                            else:
+                                if item not in cleaned_list:
+                                    cleaned_list.append(item)
                         
                         if len(cleaned_list) != original_length:
                             user_data['activity'][field] = cleaned_list
