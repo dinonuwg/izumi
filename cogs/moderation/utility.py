@@ -832,10 +832,16 @@ class UtilityCog(commands.Cog, name="Utility"):
         if before.content == after.content:
             return
         
-        # Store the edit information
+        # Store the edit information (store data, not Message objects)
         self.last_edits[before.channel.id] = {
-            "before": before,
-            "after": after,
+            "author_id": before.author.id,
+            "author_name": before.author.display_name,
+            "author_avatar": before.author.display_avatar.url,
+            "before_content": before.content,
+            "after_content": after.content,
+            "message_id": after.id,
+            "channel_id": after.channel.id,
+            "guild_id": after.guild.id,
             "timestamp": time.time()
         }
 
@@ -844,7 +850,7 @@ class UtilityCog(commands.Cog, name="Utility"):
         """Show the most recent message edit in this channel"""
         await self._handle_lastedit(interaction, True)
 
-    @commands.command(name="lastedit", aliases=["recentedit", "lastedit", "le"])
+    @commands.command(name="lastedit", aliases=["recentedit", "le"])
     async def lastedit_prefix(self, ctx: commands.Context):
         """Show the most recent message edit in this channel
         
@@ -859,7 +865,7 @@ class UtilityCog(commands.Cog, name="Utility"):
         
         # Check if we have any edits tracked for this channel
         if channel_id not in self.last_edits:
-            msg = "No message edits have been tracked in this channel yet."
+            msg = "No message edits have been tracked in this channel yet. Edit a message to start tracking!"
             if is_slash:
                 await ctx_or_interaction.response.send_message(msg, ephemeral=True)
             else:
@@ -867,25 +873,22 @@ class UtilityCog(commands.Cog, name="Utility"):
             return
         
         edit_data = self.last_edits[channel_id]
-        before_msg = edit_data["before"]
-        after_msg = edit_data["after"]
-        edit_timestamp = edit_data["timestamp"]
         
         # Create embed
         embed = discord.Embed(
             title="Last Message Edit",
             color=discord.Color.blue(),
-            timestamp=datetime.fromtimestamp(edit_timestamp, tz=timezone.utc)
+            timestamp=datetime.fromtimestamp(edit_data["timestamp"], tz=timezone.utc)
         )
         
         # Add user info
         embed.set_author(
-            name=before_msg.author.display_name,
-            icon_url=before_msg.author.display_avatar.url
+            name=edit_data["author_name"],
+            icon_url=edit_data["author_avatar"]
         )
         
         # Add before content (truncate if too long)
-        before_content = before_msg.content
+        before_content = edit_data["before_content"]
         if len(before_content) > 1024:
             before_content = before_content[:1021] + "..."
         
@@ -896,7 +899,7 @@ class UtilityCog(commands.Cog, name="Utility"):
         )
         
         # Add after content (truncate if too long)
-        after_content = after_msg.content
+        after_content = edit_data["after_content"]
         if len(after_content) > 1024:
             after_content = after_content[:1021] + "..."
         
@@ -907,9 +910,10 @@ class UtilityCog(commands.Cog, name="Utility"):
         )
         
         # Add message link
+        message_url = f"https://discord.com/channels/{edit_data['guild_id']}/{edit_data['channel_id']}/{edit_data['message_id']}"
         embed.add_field(
             name="Message Link",
-            value=f"[Jump to Message]({after_msg.jump_url})",
+            value=f"[Jump to Message]({message_url})",
             inline=False
         )
         
