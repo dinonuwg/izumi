@@ -45,10 +45,9 @@ class ImageGenerationCog(commands.Cog, name="ImageGen"):
             genai.configure(api_key=api_key)
             
             # List of Gemini image generation models to try (in order of preference)
-            # Preview version first (usually has latest features), then stable
+            # Testing with stable gemini-2.5-flash-image model
             model_configs = [
-                ('gemini-2.5-flash-image-preview', 'Gemini 2.5 Flash Image Preview'),
-                ('gemini-2.5-flash-image', 'Gemini 2.5 Flash Image (Stable)'),
+                ('gemini-2.5-flash-image', 'Gemini 2.5 Flash Image'),
             ]
             
             # Try to initialize each model
