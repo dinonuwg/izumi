@@ -916,6 +916,39 @@ class IzumiAI(commands.Cog):
             return None
         
         try:
+            # First, check video duration BEFORE downloading
+            duration_cmd = [
+                'yt-dlp',
+                '--print', 'duration',
+                '--no-playlist',
+                '--quiet',
+                url
+            ]
+            
+            try:
+                duration_process = await asyncio.create_subprocess_exec(
+                    *duration_cmd,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE
+                )
+                
+                duration_stdout, _ = await asyncio.wait_for(
+                    duration_process.communicate(),
+                    timeout=10
+                )
+                
+                video_duration = int(duration_stdout.decode().strip())
+                
+                # Check if video exceeds duration limit
+                if video_duration > YOUTUBE_MAX_DURATION_SECONDS:
+                    minutes = video_duration // 60
+                    max_minutes = YOUTUBE_MAX_DURATION_SECONDS // 60
+                    return f"[YouTube video is {minutes} minutes long - exceeds {max_minutes} minute limit for analysis]"
+                
+            except Exception as e:
+                print(f"⚠️ Could not check video duration: {e}")
+                # Continue anyway, will fail gracefully if too large
+            
             # Download media based on config
             result = await self._download_youtube_media(url, mode=YOUTUBE_DOWNLOAD_MODE)
             

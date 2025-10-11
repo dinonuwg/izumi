@@ -36,7 +36,7 @@ ITEMS_PER_PAGE = 10
 YOUTUBE_ANALYSIS_ENABLED = True  # Set to False to disable YouTube analysis
 YOUTUBE_DOWNLOAD_MODE = "audio"  # "audio" (default, faster/cheaper) or "video" (full analysis)
 YOUTUBE_MAX_SIZE_MB = 100  # Maximum file size in MB (for video mode)
-YOUTUBE_MAX_DURATION_SECONDS = 600  # Maximum duration (10 minutes default)
+YOUTUBE_MAX_DURATION_SECONDS = 1800  # Maximum duration (30 minutes default)
 YOUTUBE_TEMP_DIR = os.path.join(DATA_FOLDER, "youtube_temp")  # Temp download folder
 
 # Create data folder if it doesn't exist
