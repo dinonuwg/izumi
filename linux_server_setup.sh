@@ -80,7 +80,8 @@ install_packages() {
         screen \
         tmux \
         ufw \
-        fail2ban
+        fail2ban \
+        ffmpeg
     
     print_success "Required packages installed"
 }
