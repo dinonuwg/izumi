@@ -749,45 +749,135 @@ class IzumiAI(commands.Cog):
         instruction = instructions.get(continuation_type, instructions["general"])
         return f"{base_prompt}Instruction: {instruction}"
     
-    async def _analyze_images_in_message(self, message: discord.Message) -> str:
-        """Analyze images/GIFs in a message and return descriptions"""
-        image_descriptions = []
+    async def _analyze_media_in_message(self, message: discord.Message) -> str:
+        """Analyze images, videos, audio, and documents in a message"""
+        media_descriptions = []
         
-        # Check attachments for images
+        # Check attachments for various media types
         for attachment in message.attachments:
-            if any(attachment.filename.lower().endswith(ext) for ext in ['.png', '.jpg', '.jpeg', '.gif', '.webp']):
-                try:
-                    # Download the image
-                    async with aiohttp.ClientSession() as session:
-                        async with session.get(attachment.url) as resp:
-                            if resp.status == 200:
-                                image_data = await resp.read()
+            filename_lower = attachment.filename.lower()
+            
+            try:
+                # Download the file
+                async with aiohttp.ClientSession() as session:
+                    async with session.get(attachment.url) as resp:
+                        if resp.status != 200:
+                            continue
+                        
+                        file_data = await resp.read()
+                        
+                        # IMAGE FILES
+                        if any(filename_lower.endswith(ext) for ext in ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.bmp']):
+                            try:
+                                media_part = {
+                                    "mime_type": attachment.content_type or "image/jpeg",
+                                    "data": file_data
+                                }
                                 
-                                # Use Gemini's vision capabilities
-                                try:
-                                    image_part = {
-                                        "mime_type": attachment.content_type or "image/jpeg",
-                                        "data": image_data
+                                prompt = "Describe what you see in this image in a brief, natural way. Focus on the main subject, actions, mood, and any text visible."
+                                response = self.gemini_model.generate_content([prompt, media_part])
+                                description = response.text.strip()
+                                
+                                media_descriptions.append(f"[Image: {description}]")
+                                print(f"🖼️ Analyzed image: {description[:100]}...")
+                                
+                            except Exception as e:
+                                print(f"Error analyzing image: {e}")
+                                media_descriptions.append(f"[Image attached: {attachment.filename}]")
+                        
+                        # VIDEO FILES
+                        elif any(filename_lower.endswith(ext) for ext in ['.mp4', '.mov', '.avi', '.mkv', '.webm', '.flv']):
+                            try:
+                                # Check file size (Discord max 25MB for normal users, 500MB for nitro)
+                                if attachment.size > 100 * 1024 * 1024:  # 100MB limit for processing
+                                    media_descriptions.append(f"[Video: {attachment.filename} (too large to analyze)]")
+                                    continue
+                                
+                                media_part = {
+                                    "mime_type": attachment.content_type or "video/mp4",
+                                    "data": file_data
+                                }
+                                
+                                prompt = "Summarize this video briefly. What's happening? What's the main subject or action? What's the mood or message?"
+                                response = self.gemini_model.generate_content([prompt, media_part])
+                                description = response.text.strip()
+                                
+                                media_descriptions.append(f"[Video: {description}]")
+                                print(f"🎥 Analyzed video: {description[:100]}...")
+                                
+                            except Exception as e:
+                                print(f"Error analyzing video: {e}")
+                                media_descriptions.append(f"[Video attached: {attachment.filename}]")
+                        
+                        # AUDIO FILES
+                        elif any(filename_lower.endswith(ext) for ext in ['.mp3', '.wav', '.ogg', '.m4a', '.flac', '.aac']):
+                            try:
+                                if attachment.size > 50 * 1024 * 1024:  # 50MB limit
+                                    media_descriptions.append(f"[Audio: {attachment.filename} (too large to analyze)]")
+                                    continue
+                                
+                                media_part = {
+                                    "mime_type": attachment.content_type or "audio/mpeg",
+                                    "data": file_data
+                                }
+                                
+                                prompt = "Transcribe and/or summarize this audio. What's being said? What's the tone or mood?"
+                                response = self.gemini_model.generate_content([prompt, media_part])
+                                description = response.text.strip()
+                                
+                                media_descriptions.append(f"[Audio: {description}]")
+                                print(f"🎵 Analyzed audio: {description[:100]}...")
+                                
+                            except Exception as e:
+                                print(f"Error analyzing audio: {e}")
+                                media_descriptions.append(f"[Audio attached: {attachment.filename}]")
+                        
+                        # DOCUMENT FILES
+                        elif any(filename_lower.endswith(ext) for ext in ['.pdf', '.txt', '.doc', '.docx', '.md']):
+                            try:
+                                if attachment.size > 20 * 1024 * 1024:  # 20MB limit
+                                    media_descriptions.append(f"[Document: {attachment.filename} (too large to analyze)]")
+                                    continue
+                                
+                                # For text files, decode and send as text
+                                if filename_lower.endswith('.txt') or filename_lower.endswith('.md'):
+                                    try:
+                                        text_content = file_data.decode('utf-8')[:10000]  # Limit to 10k chars
+                                        prompt = f"Summarize this document briefly:\n\n{text_content}"
+                                        response = self.gemini_model.generate_content(prompt)
+                                        description = response.text.strip()
+                                    except:
+                                        # Fallback to binary if decode fails
+                                        media_part = {
+                                            "mime_type": "text/plain",
+                                            "data": file_data
+                                        }
+                                        prompt = "Summarize this document briefly. What are the main points or topics?"
+                                        response = self.gemini_model.generate_content([prompt, media_part])
+                                        description = response.text.strip()
+                                else:
+                                    # PDF or other documents
+                                    media_part = {
+                                        "mime_type": attachment.content_type or "application/pdf",
+                                        "data": file_data
                                     }
                                     
-                                    # Use vision model to analyze
-                                    vision_prompt = "Describe what you see in this image in a brief, natural way. Focus on the main subject, actions, mood, and any text visible."
-                                    
-                                    response = self.gemini_model.generate_content([vision_prompt, image_part])
+                                    prompt = "Summarize this document briefly. What are the main points or topics?"
+                                    response = self.gemini_model.generate_content([prompt, media_part])
                                     description = response.text.strip()
-                                    
-                                    image_descriptions.append(f"[Image: {description}]")
-                                    print(f"🖼️ Analyzed image: {description[:100]}...")
-                                    
-                                except Exception as e:
-                                    print(f"Error analyzing image with Gemini: {e}")
-                                    image_descriptions.append(f"[Image attached: {attachment.filename}]")
-                
-                except Exception as e:
-                    print(f"Error downloading/analyzing image: {e}")
-                    image_descriptions.append(f"[Image: {attachment.filename}]")
+                                
+                                media_descriptions.append(f"[Document ({attachment.filename}): {description}]")
+                                print(f"� Analyzed document: {description[:100]}...")
+                                
+                            except Exception as e:
+                                print(f"Error analyzing document: {e}")
+                                media_descriptions.append(f"[Document attached: {attachment.filename}]")
+                        
+            except Exception as e:
+                print(f"Error downloading/processing attachment {attachment.filename}: {e}")
+                media_descriptions.append(f"[File attached: {attachment.filename}]")
         
-        # Check embeds for images (e.g., tenor GIFs, imgur links)
+        # Check embeds for images/videos (e.g., tenor GIFs, YouTube embeds, imgur links)
         for embed in message.embeds:
             if embed.type in ['image', 'gifv', 'rich'] and (embed.image or embed.thumbnail):
                 image_url = embed.image.url if embed.image else (embed.thumbnail.url if embed.thumbnail else None)
@@ -800,31 +890,38 @@ class IzumiAI(commands.Cog):
                                     image_data = await resp.read()
                                     
                                     try:
-                                        image_part = {
+                                        media_part = {
                                             "mime_type": resp.content_type or "image/jpeg",
                                             "data": image_data
                                         }
                                         
-                                        vision_prompt = "Describe what you see in this image/GIF in a brief, natural way. If it's a GIF or meme, describe the action, mood, or joke."
-                                        
-                                        response = self.gemini_model.generate_content([vision_prompt, image_part])
+                                        prompt = "Describe what you see in this image/GIF in a brief, natural way. If it's a GIF or meme, describe the action, mood, or joke."
+                                        response = self.gemini_model.generate_content([prompt, media_part])
                                         description = response.text.strip()
                                         
-                                        image_descriptions.append(f"[Image/GIF: {description}]")
+                                        media_descriptions.append(f"[Image/GIF: {description}]")
                                         print(f"🖼️ Analyzed embed image: {description[:100]}...")
                                         
                                     except Exception as e:
                                         print(f"Error analyzing embed image: {e}")
                                         if embed.title or embed.description:
-                                            image_descriptions.append(f"[Image: {embed.title or embed.description[:100]}]")
+                                            media_descriptions.append(f"[Image: {embed.title or embed.description[:100]}]")
                                         else:
-                                            image_descriptions.append("[Image/GIF attached]")
+                                            media_descriptions.append("[Image/GIF attached]")
                     
                     except Exception as e:
                         print(f"Error downloading embed image: {e}")
-                        image_descriptions.append("[Image/GIF in message]")
+                        media_descriptions.append("[Image/GIF in message]")
+            
+            # Handle YouTube video embeds
+            elif embed.type == 'video' and embed.url:
+                if 'youtube.com' in embed.url or 'youtu.be' in embed.url:
+                    video_title = embed.title or "YouTube video"
+                    video_desc = embed.description[:200] if embed.description else ""
+                    media_descriptions.append(f"[YouTube Video: '{video_title}' - {video_desc}]")
+                    print(f"🎬 YouTube video linked: {video_title}")
         
-        return "\n".join(image_descriptions) if image_descriptions else ""
+        return "\n".join(media_descriptions) if media_descriptions else ""
 
     async def _handle_ai_response(self, message: discord.Message, is_lyrics: bool = False):
         """Generate and send AI response with delay to catch follow-up messages"""
@@ -1028,17 +1125,17 @@ class IzumiAI(commands.Cog):
             content = msg.content.replace(f'<@{self.bot.user.id}>', '').strip()
             content = content.replace(f'<@!{self.bot.user.id}>', '').strip()
             
-            # Check for images/GIFs in the message
-            image_description = await self._analyze_images_in_message(msg)
+            # Check for media (images/videos/audio/documents) in the message
+            media_description = await self._analyze_media_in_message(msg)
             
             # Build the message part
             author_name = msg.author.display_name
-            if content and image_description:
-                combined_parts.append(f"{author_name}: {content}\n{image_description}")
+            if content and media_description:
+                combined_parts.append(f"{author_name}: {content}\n{media_description}")
             elif content:
                 combined_parts.append(f"{author_name}: {content}")
-            elif image_description:
-                combined_parts.append(f"{author_name}: {image_description}")
+            elif media_description:
+                combined_parts.append(f"{author_name}: {media_description}")
         
         return '\n'.join(combined_parts)
 
