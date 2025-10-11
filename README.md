@@ -39,6 +39,7 @@ and many more additional features.
 * Discord bot token → [Developer Portal](https://discord.com/developers/applications)
 * Gemini API key → [Google AI Studio](https://aistudio.google.com/)
 * *(Optional)* osu! API credentials → [osu! settings](https://osu.ppy.sh/home/account/edit)
+* *(Optional)* FFmpeg for YouTube video/audio analysis → [FFmpeg Download](https://ffmpeg.org/download.html)
 
 ### Install
 

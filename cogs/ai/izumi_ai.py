@@ -12,11 +12,22 @@ import time
 import asyncio
 import random
 import aiohttp
+import re
+import subprocess
+import tempfile
+from pathlib import Path
 from typing import Dict, Optional
 
 from .learning_engine import LearningEngine
 from .context_builder import ContextBuilder
 from utils.helpers import save_json, load_json
+from utils.config import (
+    YOUTUBE_ANALYSIS_ENABLED,
+    YOUTUBE_DOWNLOAD_MODE,
+    YOUTUBE_MAX_SIZE_MB,
+    YOUTUBE_MAX_DURATION_SECONDS,
+    YOUTUBE_TEMP_DIR
+)
 
 class IzumiAI(commands.Cog):
     """Main AI chat system with advanced learning capabilities"""
@@ -749,9 +760,231 @@ class IzumiAI(commands.Cog):
         instruction = instructions.get(continuation_type, instructions["general"])
         return f"{base_prompt}Instruction: {instruction}"
     
+    def _extract_youtube_url(self, text: str) -> Optional[str]:
+        """Extract YouTube URL from message text"""
+        # Match various YouTube URL formats
+        patterns = [
+            r'(?:https?://)?(?:www\.)?youtube\.com/watch\?v=([a-zA-Z0-9_-]{11})',
+            r'(?:https?://)?(?:www\.)?youtu\.be/([a-zA-Z0-9_-]{11})',
+            r'(?:https?://)?(?:www\.)?youtube\.com/shorts/([a-zA-Z0-9_-]{11})',
+        ]
+        
+        for pattern in patterns:
+            match = re.search(pattern, text)
+            if match:
+                video_id = match.group(1)
+                return f"https://www.youtube.com/watch?v={video_id}"
+        
+        return None
+    
+    async def _check_ytdlp_installed(self) -> bool:
+        """Check if yt-dlp is installed"""
+        try:
+            result = subprocess.run(
+                ['yt-dlp', '--version'],
+                capture_output=True,
+                text=True,
+                timeout=5
+            )
+            return result.returncode == 0
+        except (subprocess.TimeoutExpired, FileNotFoundError):
+            return False
+    
+    async def _download_youtube_media(self, url: str, mode: str = "audio") -> Optional[tuple]:
+        """
+        Download YouTube video/audio using yt-dlp
+        Returns: (file_path, mime_type, duration_seconds) or None if failed
+        """
+        if not YOUTUBE_ANALYSIS_ENABLED:
+            return None
+        
+        # Check if yt-dlp is installed
+        if not await self._check_ytdlp_installed():
+            print("⚠️ yt-dlp not installed. Install with: pip install yt-dlp")
+            return None
+        
+        try:
+            # Create unique temp filename
+            temp_id = f"yt_{int(time.time())}_{random.randint(1000, 9999)}"
+            
+            if mode == "audio":
+                # Audio extraction (faster, smaller)
+                output_path = os.path.join(YOUTUBE_TEMP_DIR, f"{temp_id}.mp3")
+                
+                # yt-dlp command for audio extraction
+                cmd = [
+                    'yt-dlp',
+                    '--extract-audio',
+                    '--audio-format', 'mp3',
+                    '--audio-quality', '128K',  # 128 kbps for smaller size
+                    '--max-filesize', f'{YOUTUBE_MAX_SIZE_MB}M',
+                    '--output', output_path,
+                    '--no-playlist',
+                    '--quiet',
+                    '--no-warnings',
+                    url
+                ]
+                
+                mime_type = "audio/mpeg"
+                
+            else:  # video mode
+                # Video with compression to stay under size limit
+                output_path = os.path.join(YOUTUBE_TEMP_DIR, f"{temp_id}.mp4")
+                
+                # yt-dlp command for video with quality limits
+                cmd = [
+                    'yt-dlp',
+                    '--format', 'bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/best[height<=720][ext=mp4]/best',
+                    '--merge-output-format', 'mp4',
+                    '--max-filesize', f'{YOUTUBE_MAX_SIZE_MB}M',
+                    '--output', output_path,
+                    '--no-playlist',
+                    '--quiet',
+                    '--no-warnings',
+                    url
+                ]
+                
+                mime_type = "video/mp4"
+            
+            print(f"🎬 Downloading YouTube {mode} from: {url}")
+            
+            # Run yt-dlp with timeout
+            process = await asyncio.create_subprocess_exec(
+                *cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE
+            )
+            
+            try:
+                stdout, stderr = await asyncio.wait_for(
+                    process.communicate(),
+                    timeout=300  # 5 minute timeout
+                )
+            except asyncio.TimeoutError:
+                process.kill()
+                print(f"❌ YouTube download timeout for {url}")
+                return None
+            
+            if process.returncode != 0:
+                error_msg = stderr.decode() if stderr else "Unknown error"
+                print(f"❌ yt-dlp error: {error_msg}")
+                return None
+            
+            # Check if file exists and get info
+            if not os.path.exists(output_path):
+                print(f"❌ Downloaded file not found: {output_path}")
+                return None
+            
+            file_size = os.path.getsize(output_path)
+            if file_size > YOUTUBE_MAX_SIZE_MB * 1024 * 1024:
+                print(f"❌ File too large: {file_size / 1024 / 1024:.1f}MB")
+                os.remove(output_path)
+                return None
+            
+            # Get duration using yt-dlp
+            duration_cmd = [
+                'yt-dlp',
+                '--print', 'duration',
+                '--no-playlist',
+                '--quiet',
+                url
+            ]
+            
+            duration_process = await asyncio.create_subprocess_exec(
+                *duration_cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE
+            )
+            
+            duration_stdout, _ = await duration_process.communicate()
+            try:
+                duration = int(duration_stdout.decode().strip())
+            except:
+                duration = 0
+            
+            print(f"✅ Downloaded YouTube {mode}: {file_size / 1024 / 1024:.1f}MB, {duration}s duration")
+            
+            return (output_path, mime_type, duration)
+            
+        except Exception as e:
+            print(f"❌ Error downloading YouTube media: {e}")
+            return None
+    
+    async def _analyze_youtube_url(self, url: str, user_message: str = "") -> Optional[str]:
+        """Analyze YouTube video/audio and return description"""
+        if not YOUTUBE_ANALYSIS_ENABLED:
+            return None
+        
+        try:
+            # Download media based on config
+            result = await self._download_youtube_media(url, mode=YOUTUBE_DOWNLOAD_MODE)
+            
+            if not result:
+                return f"[YouTube video linked but couldn't download: {url}]"
+            
+            file_path, mime_type, duration = result
+            
+            try:
+                # Read the downloaded file
+                with open(file_path, 'rb') as f:
+                    media_data = f.read()
+                
+                # Prepare media part for Gemini
+                media_part = {
+                    "mime_type": mime_type,
+                    "data": media_data
+                }
+                
+                # Build prompt based on user's question
+                if any(keyword in user_message.lower() for keyword in ['summarize', 'summary', 'about', 'what is']):
+                    prompt = "Provide a comprehensive summary of this video/audio. Include the main topics, key points, and overall message."
+                elif 'timestamp' in user_message.lower() or ':' in user_message:
+                    # User asking about specific timestamp
+                    prompt = f"User asked: '{user_message}'\n\nAnalyze this video/audio and answer their question about the specific timestamp or moment they mentioned."
+                else:
+                    prompt = f"User asked: '{user_message}'\n\nAnalyze this video/audio and provide relevant information to answer their question."
+                
+                print(f"🤖 Analyzing YouTube content with Gemini...")
+                
+                # Send to Gemini for analysis
+                response = self.gemini_model.generate_content([prompt, media_part])
+                analysis = response.text.strip()
+                
+                # Format the response
+                duration_str = f"{duration // 60}:{duration % 60:02d}" if duration > 0 else "unknown"
+                media_type = "Audio" if YOUTUBE_DOWNLOAD_MODE == "audio" else "Video"
+                
+                result_text = f"[YouTube {media_type} ({duration_str}): {analysis}]"
+                
+                print(f"✅ YouTube analysis complete: {analysis[:100]}...")
+                
+                return result_text
+                
+            finally:
+                # Clean up downloaded file
+                try:
+                    if os.path.exists(file_path):
+                        os.remove(file_path)
+                        print(f"🗑️ Cleaned up temp file: {file_path}")
+                except Exception as cleanup_error:
+                    print(f"⚠️ Failed to clean up {file_path}: {cleanup_error}")
+        
+        except Exception as e:
+            print(f"❌ Error analyzing YouTube URL: {e}")
+            return f"[YouTube video linked but analysis failed: {url}]"
+    
     async def _analyze_media_in_message(self, message: discord.Message) -> str:
-        """Analyze images, videos, audio, and documents in a message"""
+        """Analyze images, videos, audio, documents, and YouTube URLs in a message"""
         media_descriptions = []
+        
+        # Check for YouTube URLs in message content
+        if YOUTUBE_ANALYSIS_ENABLED:
+            youtube_url = self._extract_youtube_url(message.content)
+            if youtube_url:
+                print(f"🎬 Detected YouTube URL: {youtube_url}")
+                youtube_analysis = await self._analyze_youtube_url(youtube_url, message.content)
+                if youtube_analysis:
+                    media_descriptions.append(youtube_analysis)
         
         # Check attachments for various media types
         for attachment in message.attachments:

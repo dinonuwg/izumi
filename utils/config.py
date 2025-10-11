@@ -32,6 +32,13 @@ IZUMI_SELF_FILE = os.path.join(DATA_FOLDER, "izumi_self.json")
 
 ITEMS_PER_PAGE = 10
 
+# YouTube video analysis settings
+YOUTUBE_ANALYSIS_ENABLED = True  # Set to False to disable YouTube analysis
+YOUTUBE_DOWNLOAD_MODE = "audio"  # "audio" (default, faster/cheaper) or "video" (full analysis)
+YOUTUBE_MAX_SIZE_MB = 100  # Maximum file size in MB (for video mode)
+YOUTUBE_MAX_DURATION_SECONDS = 600  # Maximum duration (10 minutes default)
+YOUTUBE_TEMP_DIR = os.path.join(DATA_FOLDER, "youtube_temp")  # Temp download folder
+
 # Create data folder if it doesn't exist
 if not os.path.exists(DATA_FOLDER):
     try:
@@ -39,3 +46,11 @@ if not os.path.exists(DATA_FOLDER):
         print(f"Successfully created data folder: {DATA_FOLDER}")
     except OSError as e:
         print(f"Error creating data folder {DATA_FOLDER}: {e}. Please check script permissions for this location.")
+
+# Create YouTube temp folder if it doesn't exist
+if YOUTUBE_ANALYSIS_ENABLED and not os.path.exists(YOUTUBE_TEMP_DIR):
+    try:
+        os.makedirs(YOUTUBE_TEMP_DIR)
+        print(f"Successfully created YouTube temp folder: {YOUTUBE_TEMP_DIR}")
+    except OSError as e:
+        print(f"Error creating YouTube temp folder {YOUTUBE_TEMP_DIR}: {e}")
