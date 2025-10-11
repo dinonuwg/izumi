@@ -818,6 +818,7 @@ class IzumiAI(commands.Cog):
                     '--audio-format', 'mp3',
                     '--audio-quality', '128K',  # 128 kbps for smaller size
                     '--max-filesize', f'{YOUTUBE_MAX_SIZE_MB}M',
+                    '--ffmpeg-location', '/usr/bin',  # Common FFmpeg location on Linux
                     '--output', output_path,
                     '--no-playlist',
                     '--quiet',
@@ -837,6 +838,7 @@ class IzumiAI(commands.Cog):
                     '--format', 'bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/best[height<=720][ext=mp4]/best',
                     '--merge-output-format', 'mp4',
                     '--max-filesize', f'{YOUTUBE_MAX_SIZE_MB}M',
+                    '--ffmpeg-location', '/usr/bin',  # Common FFmpeg location on Linux
                     '--output', output_path,
                     '--no-playlist',
                     '--quiet',
