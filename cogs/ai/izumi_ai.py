@@ -912,7 +912,38 @@ class IzumiAI(commands.Cog):
             print(f"❌ Error downloading YouTube media: {e}")
             return None
     
-    async def _analyze_youtube_url(self, url: str, user_message: str = "") -> Optional[str]:
+    async def _generate_youtube_waiting_response(self, user_message: str, channel) -> None:
+        """Generate and send a quick response while YouTube video is downloading"""
+        try:
+            # Build prompt for a quick "waiting" response
+            prompt = f"""The user sent you a YouTube video link and asked: "{user_message}"
+
+Generate a very brief, casual response acknowledging you'll watch/analyze it. Keep it short (under 20 words), natural, and match your personality.
+
+Examples of the vibe:
+- "okay wait a bit let me watch it"
+- "oh bet, gimme a sec to check it out"
+- "alright hold on let me see"
+- "okay one sec let me watch this"
+
+Make it natural and casual, don't copy these exactly."""
+
+            # Quick generation with minimal context
+            response = self.gemini_model.generate_content(prompt)
+            waiting_message = response.text.strip()
+            
+            # Clean up any quotes or formatting
+            waiting_message = waiting_message.strip('"\'')
+            
+            # Send the waiting message
+            await channel.send(waiting_message)
+            print(f"📨 Sent waiting message: {waiting_message}")
+            
+        except Exception as e:
+            print(f"⚠️ Could not generate waiting message: {e}")
+            # Silently continue - waiting message is optional
+    
+    async def _analyze_youtube_url(self, url: str, user_message: str = "", channel=None) -> Optional[str]:
         """Analyze YouTube video/audio and return description"""
         if not YOUTUBE_ANALYSIS_ENABLED:
             return None
@@ -950,6 +981,10 @@ class IzumiAI(commands.Cog):
             except Exception as e:
                 print(f"⚠️ Could not check video duration: {e}")
                 # Continue anyway, will fail gracefully if too large
+            
+            # Send a quick "waiting" response before downloading
+            if channel:
+                await self._generate_youtube_waiting_response(user_message, channel)
             
             # Download media based on config
             result = await self._download_youtube_media(url, mode=YOUTUBE_DOWNLOAD_MODE)
@@ -1017,7 +1052,7 @@ class IzumiAI(commands.Cog):
             youtube_url = self._extract_youtube_url(message.content)
             if youtube_url:
                 print(f"🎬 Detected YouTube URL: {youtube_url}")
-                youtube_analysis = await self._analyze_youtube_url(youtube_url, message.content)
+                youtube_analysis = await self._analyze_youtube_url(youtube_url, message.content, message.channel)
                 if youtube_analysis:
                     media_descriptions.append(youtube_analysis)
         
