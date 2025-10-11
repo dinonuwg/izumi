@@ -11,6 +11,7 @@ import os
 import time
 import asyncio
 import random
+import aiohttp
 from typing import Dict, Optional
 
 from .learning_engine import LearningEngine
@@ -748,6 +749,83 @@ class IzumiAI(commands.Cog):
         instruction = instructions.get(continuation_type, instructions["general"])
         return f"{base_prompt}Instruction: {instruction}"
     
+    async def _analyze_images_in_message(self, message: discord.Message) -> str:
+        """Analyze images/GIFs in a message and return descriptions"""
+        image_descriptions = []
+        
+        # Check attachments for images
+        for attachment in message.attachments:
+            if any(attachment.filename.lower().endswith(ext) for ext in ['.png', '.jpg', '.jpeg', '.gif', '.webp']):
+                try:
+                    # Download the image
+                    async with aiohttp.ClientSession() as session:
+                        async with session.get(attachment.url) as resp:
+                            if resp.status == 200:
+                                image_data = await resp.read()
+                                
+                                # Use Gemini's vision capabilities
+                                try:
+                                    image_part = {
+                                        "mime_type": attachment.content_type or "image/jpeg",
+                                        "data": image_data
+                                    }
+                                    
+                                    # Use vision model to analyze
+                                    vision_prompt = "Describe what you see in this image in a brief, natural way. Focus on the main subject, actions, mood, and any text visible."
+                                    
+                                    response = self.gemini_model.generate_content([vision_prompt, image_part])
+                                    description = response.text.strip()
+                                    
+                                    image_descriptions.append(f"[Image: {description}]")
+                                    print(f"🖼️ Analyzed image: {description[:100]}...")
+                                    
+                                except Exception as e:
+                                    print(f"Error analyzing image with Gemini: {e}")
+                                    image_descriptions.append(f"[Image attached: {attachment.filename}]")
+                
+                except Exception as e:
+                    print(f"Error downloading/analyzing image: {e}")
+                    image_descriptions.append(f"[Image: {attachment.filename}]")
+        
+        # Check embeds for images (e.g., tenor GIFs, imgur links)
+        for embed in message.embeds:
+            if embed.type in ['image', 'gifv', 'rich'] and (embed.image or embed.thumbnail):
+                image_url = embed.image.url if embed.image else (embed.thumbnail.url if embed.thumbnail else None)
+                
+                if image_url:
+                    try:
+                        async with aiohttp.ClientSession() as session:
+                            async with session.get(image_url) as resp:
+                                if resp.status == 200:
+                                    image_data = await resp.read()
+                                    
+                                    try:
+                                        image_part = {
+                                            "mime_type": resp.content_type or "image/jpeg",
+                                            "data": image_data
+                                        }
+                                        
+                                        vision_prompt = "Describe what you see in this image/GIF in a brief, natural way. If it's a GIF or meme, describe the action, mood, or joke."
+                                        
+                                        response = self.gemini_model.generate_content([vision_prompt, image_part])
+                                        description = response.text.strip()
+                                        
+                                        image_descriptions.append(f"[Image/GIF: {description}]")
+                                        print(f"🖼️ Analyzed embed image: {description[:100]}...")
+                                        
+                                    except Exception as e:
+                                        print(f"Error analyzing embed image: {e}")
+                                        if embed.title or embed.description:
+                                            image_descriptions.append(f"[Image: {embed.title or embed.description[:100]}]")
+                                        else:
+                                            image_descriptions.append("[Image/GIF attached]")
+                    
+                    except Exception as e:
+                        print(f"Error downloading embed image: {e}")
+                        image_descriptions.append("[Image/GIF in message]")
+        
+        return "\n".join(image_descriptions) if image_descriptions else ""
+
     async def _handle_ai_response(self, message: discord.Message, is_lyrics: bool = False):
         """Generate and send AI response with delay to catch follow-up messages"""
         if not self.gemini_model:
@@ -784,8 +862,8 @@ class IzumiAI(commands.Cog):
             return
         
         try:
-            # Combine all recent messages from the user
-            combined_prompt = self._combine_user_messages(recent_messages)
+            # Combine all recent messages from the user (with image analysis)
+            combined_prompt = await self._combine_user_messages(recent_messages)
             print(f"🔧 Combined conversation context:\n{combined_prompt}")
             
             if not combined_prompt:
@@ -939,7 +1017,7 @@ class IzumiAI(commands.Cog):
         print(f"📥 Collected {len(messages)} messages from conversation context (last 30s)")
         return messages
 
-    def _combine_user_messages(self, messages: list) -> str:
+    async def _combine_user_messages(self, messages: list) -> str:
         """Combine conversation context from multiple users into a natural prompt"""
         if not messages:
             return ""
@@ -949,10 +1027,18 @@ class IzumiAI(commands.Cog):
             # Remove bot mentions from each message
             content = msg.content.replace(f'<@{self.bot.user.id}>', '').strip()
             content = content.replace(f'<@!{self.bot.user.id}>', '').strip()
-            if content:
-                # Include who said what for better context
-                author_name = msg.author.display_name
+            
+            # Check for images/GIFs in the message
+            image_description = await self._analyze_images_in_message(msg)
+            
+            # Build the message part
+            author_name = msg.author.display_name
+            if content and image_description:
+                combined_parts.append(f"{author_name}: {content}\n{image_description}")
+            elif content:
                 combined_parts.append(f"{author_name}: {content}")
+            elif image_description:
+                combined_parts.append(f"{author_name}: {image_description}")
         
         return '\n'.join(combined_parts)
 
