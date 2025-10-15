@@ -561,9 +561,9 @@ class IzumiAI(commands.Cog):
         if not tracker.get("is_active", False):
             return False
         
-        # Check if it's been less than 60 seconds since last participation
+        # Check if it's been less than 12 hours since last participation
         time_since_last = time.time() - tracker.get("last_participation", 0)
-        if time_since_last > 60:
+        if time_since_last > 43200:
             # Reset participation status if too much time has passed
             tracker["is_active"] = False
             return False
